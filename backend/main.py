@@ -10,21 +10,20 @@ from sqlalchemy.orm import Session
 
 load_dotenv()
 
-from auth import create_user_token, get_current_user, hash_password, verify_club_password
+from auth import create_user_token, get_current_membership, hash_password, require_global_admin
 from database import Base, SessionLocal, engine, get_db
-from models import User
-from routers import books, members, schedule
-from schemas import EnterRequest, SelectRequest, TokenResponse, UserOut
+from models import Club, ClubMembership, User
+from routers import availability, books, clubs, members, polls, schedule
+from schemas import ClubEntryOut, ClubMemberOut, MeOut, SelectRequest, EnterRequest, TokenResponse
 
-# Heart emojis used when seeding the admin — must stay in sync with frontend config
 HEART_EMOJIS = ["💜", "💙", "💚", "💛", "🧡", "❤️", "🩷", "🩵", "💖", "💗"]
 
 app = FastAPI(title="Book Club API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -32,39 +31,81 @@ app.add_middleware(
 app.include_router(books.router, prefix="/books", tags=["books"])
 app.include_router(schedule.router, prefix="/dates", tags=["schedule"])
 app.include_router(members.router, prefix="/members", tags=["members"])
+app.include_router(availability.router, prefix="/availability", tags=["availability"])
+app.include_router(clubs.router, prefix="/clubs", tags=["clubs"])
+app.include_router(polls.router, prefix="/polls", tags=["polls"])
+
+
+def _build_me_out(membership: ClubMembership) -> MeOut:
+    """Build a MeOut response from a ClubMembership.
+
+    Args:
+        membership: The ClubMembership with user and club loaded.
+
+    Returns:
+        A MeOut instance combining user and club context.
+    """
+    return MeOut(
+        id=membership.user.id,
+        username=membership.user.username,
+        email=membership.user.email,
+        heart_color=membership.user.heart_color,
+        role=membership.user.role,
+        display_name=membership.display_name,
+        club_role=membership.role,
+        club_id=membership.club_id,
+        club_name=membership.club.name,
+        created_at=membership.user.created_at,
+    )
 
 
 def seed_admin(db: Session) -> None:
-    """Create the default admin user if no users exist.
+    """Create the default admin user and first club if none exist.
 
     Args:
-        db: The database session to use for seeding.
+        db: The database session.
     """
     if db.query(User).count() > 0:
         return
 
-    username = os.getenv("ADMIN_USERNAME", "admin")
+    admin_username = os.getenv("ADMIN_USERNAME", "admin")
+    club_name = os.getenv("CLUB_NAME", "The Spicy Book Coven")
     club_password = os.getenv("CLUB_PASSWORD", "bookclub2026")
 
     admin = User(
-        username=username,
-        hashed_password=hash_password("unused-in-simple-auth"),
+        username=admin_username,
+        hashed_password=hash_password("unused"),
         role="admin",
         heart_color=random.choice(HEART_EMOJIS),
     )
     db.add(admin)
+    db.flush()
+
+    club = Club(name=club_name, password=club_password)
+    db.add(club)
+    db.flush()
+
+    membership = ClubMembership(
+        user_id=admin.id,
+        club_id=club.id,
+        display_name=admin_username,
+        role="admin",
+    )
+    db.add(membership)
     db.commit()
+
     print(f"\n{'='*50}")
-    print("Admin account created:")
-    print(f"  Username : {username}")
-    print(f"  Club password: {club_password}")
-    print("Change CLUB_PASSWORD in your .env file before sharing!")
+    print("First club created!")
+    print(f"  Club    : {club_name}")
+    print(f"  Password: {club_password}")
+    print(f"  Admin   : {admin_username}")
+    print("Change CLUB_PASSWORD in backend/.env before sharing!")
     print(f"{'='*50}\n")
 
 
 @app.on_event("startup")
 def startup() -> None:
-    """Initialize the database and seed the admin user on startup."""
+    """Initialize the database and seed on first run."""
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
@@ -73,59 +114,80 @@ def startup() -> None:
         db.close()
 
 
-@app.post("/auth/enter", response_model=list[UserOut])
-def enter(payload: EnterRequest, db: Session = Depends(get_db)) -> list[UserOut]:
-    """Verify the club password and return the list of members to pick from.
+@app.post("/auth/enter", response_model=list[ClubEntryOut])
+def enter(payload: EnterRequest, db: Session = Depends(get_db)) -> list[ClubEntryOut]:
+    """Verify a club password and return matching clubs with their member lists.
 
     Args:
-        payload: Contains the club password.
+        payload: Contains the club password to check.
         db: The database session.
 
     Returns:
-        A list of all users, ordered by username.
+        A list of ClubEntryOut objects for all clubs matching the password.
 
     Raises:
-        HTTPException: If the club password is wrong.
+        HTTPException: If no club matches the password.
     """
-    if not verify_club_password(payload.password):
-        raise HTTPException(status_code=401, detail="Wrong club password")
-    users = db.query(User).order_by(User.username).all()
-    return [UserOut.model_validate(u) for u in users]
+    matched = db.query(Club).filter(Club.password == payload.password).all()
+    if not matched:
+        raise HTTPException(status_code=401, detail="Wrong password")
+
+    result = []
+    for club in matched:
+        members_out = [
+            ClubMemberOut(
+                user_id=m.user_id,
+                username=m.user.username,
+                display_name=m.display_name,
+                heart_color=m.user.heart_color,
+                role=m.role,
+            )
+            for m in club.memberships
+        ]
+        result.append(ClubEntryOut(club_id=club.id, club_name=club.name, members=members_out))
+    return result
 
 
 @app.post("/auth/select", response_model=TokenResponse)
 def select_user(payload: SelectRequest, db: Session = Depends(get_db)) -> TokenResponse:
-    """Issue a session token for the selected user (no password required).
+    """Issue a session token for the selected user and club.
 
     Args:
-        payload: Contains the user_id to select.
+        payload: Contains user_id and club_id.
         db: The database session.
 
     Returns:
-        A TokenResponse with an access token and user info.
+        A TokenResponse with access token and user/club context.
 
     Raises:
-        HTTPException: If the user_id does not exist.
+        HTTPException: If the user is not a member of the club.
     """
-    user = db.query(User).filter(User.id == payload.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    token = create_user_token(user.id)
+    membership = (
+        db.query(ClubMembership)
+        .filter(
+            ClubMembership.user_id == payload.user_id,
+            ClubMembership.club_id == payload.club_id,
+        )
+        .first()
+    )
+    if not membership:
+        raise HTTPException(status_code=404, detail="Membership not found")
+    token = create_user_token(membership.user_id, membership.club_id)
     return TokenResponse(
         access_token=token,
         token_type="bearer",
-        user=UserOut.model_validate(user),
+        user=_build_me_out(membership),
     )
 
 
-@app.get("/auth/me", response_model=UserOut)
-def me(current_user: User = Depends(get_current_user)) -> UserOut:
-    """Return the currently authenticated user.
+@app.get("/auth/me", response_model=MeOut)
+def me(membership: ClubMembership = Depends(get_current_membership)) -> MeOut:
+    """Return the current user and club context.
 
     Args:
-        current_user: The authenticated user from the token.
+        membership: The current club membership from the token.
 
     Returns:
-        The current user's profile.
+        A MeOut combining user and club context.
     """
-    return UserOut.model_validate(current_user)
+    return _build_me_out(membership)

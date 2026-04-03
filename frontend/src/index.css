@@ -1,3 +1,42 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Global dark theme ───────────────────────────────────────────────────── */
+html, body {
+  background: linear-gradient(135deg, #0B132B 0%, #1C2541 55%, #0F1F1A 100%);
+  background-attachment: fixed;
+  background-size: cover;
+  min-height: 100%;
+  color: #F5F5F5;
+}
+
+/* ── Dark scrollbar ──────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0B132B;
+}
+::-webkit-scrollbar-thumb {
+  background: #2d3a5a;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3d4a6a;
+}
+
+/* ── Native date/time inputs — force dark ────────────────────────────────── */
+input[type="date"],
+input[type="time"] {
+  color-scheme: dark;
+}
+
+/* ── Select arrow tint ───────────────────────────────────────────────────── */
+select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239CA3AF' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  appearance: none;
+}

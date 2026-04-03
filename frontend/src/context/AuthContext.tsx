@@ -1,14 +1,16 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import api from "../api/client";
-import type { User } from "../types";
+import type { ClubEntry, User } from "../types";
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  /** Step 1: verify club password → returns member list to pick from */
-  enterClub: (password: string) => Promise<User[]>;
-  /** Step 2: select a name from the list → stores session */
-  selectUser: (userId: number) => Promise<void>;
+  /** Step 1: verify club password → returns list of clubs + their members */
+  enterClub: (password: string) => Promise<ClubEntry[]>;
+  /** Step 2: select a name and club → stores session */
+  selectUser: (userId: number, clubId: number) => Promise<void>;
+  /** Switch to a different club for the same user (re-issues token) */
+  switchClub: (clubId: number) => Promise<void>;
   logout: () => void;
 }
 
@@ -18,7 +20,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // On mount, restore session from stored token
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -32,17 +33,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  async function enterClub(password: string): Promise<User[]> {
-    const res = await api.post<User[]>("/auth/enter", { password });
+  async function enterClub(password: string): Promise<ClubEntry[]> {
+    const res = await api.post<ClubEntry[]>("/auth/enter", { password });
     return res.data;
   }
 
-  async function selectUser(userId: number): Promise<void> {
+  async function selectUser(userId: number, clubId: number): Promise<void> {
     const res = await api.post<{ access_token: string; user: User }>("/auth/select", {
       user_id: userId,
+      club_id: clubId,
     });
     localStorage.setItem("token", res.data.access_token);
     setUser(res.data.user);
+  }
+
+  async function switchClub(clubId: number): Promise<void> {
+    if (!user) return;
+    await selectUser(user.id, clubId);
   }
 
   function logout(): void {
@@ -51,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, enterClub, selectUser, logout }}>
+    <AuthContext.Provider value={{ user, loading, enterClub, selectUser, switchClub, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -27,7 +27,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-purple-50 flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 w-full max-w-sm p-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Sister Book Club</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">The Spicy Book Coven</h1>
         <p className="text-gray-500 text-sm mb-6">Sign in to your account</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">

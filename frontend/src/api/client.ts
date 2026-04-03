@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://localhost:8000",
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
 });
 
 // Attach the JWT token to every request if one is stored
@@ -13,13 +13,13 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// If the server returns 401, clear the token so the user is sent to login
+// If the server returns 401, clear the token and go to the entry page
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem("token");
-      window.location.href = "/login";
+      window.location.href = "/enter";
     }
     return Promise.reject(error);
   }
