@@ -150,7 +150,7 @@ export default function MembersPage() {
           onClick={() => setShowMasterList((v) => !v)}
           className="w-full flex items-center justify-between group mb-1"
         >
-          <h2 className="font-script text-4xl text-coven-mystic">The Spicy Book Coven</h2>
+          <h2 className="font-script text-4xl text-coven-amber">The Spicy Book Coven</h2>
           <span className="text-gray-500 text-xs group-hover:text-gray-300 transition-colors">
             {showMasterList ? "▲ hide" : "▼ show"}
           </span>

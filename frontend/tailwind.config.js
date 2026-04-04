@@ -3,20 +3,17 @@ export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
-      fontFamily: {
-        script: ['"Alex Brush"', 'cursive'],
-      },
       colors: {
         app: {
-          bg:      "#0B132B",  // Midnight Blue — page background
-          surface: "#1C2541",  // Stormy Blue-Gray — cards, panels
-          raised:  "#243256",  // slightly raised elements, inputs
-          border:  "#2d3a5a",  // default border
-          border2: "#3d4a6a",  // stronger border
+          bg:      "#0F1226",  // Deep indigo-black — page background
+          surface: "#1F223A",  // Dark indigo — cards, panels
+          raised:  "#2A2F4A",  // slightly raised elements, inputs
+          border:  "#343A5A",  // default border
+          border2: "#434A6B",  // stronger border
         },
         coven: {
-          ember:    "#FF6A2A",  // primary button/accent
-          flame:    "#FFB347",  // hover state
+          ember:    "#D96B3B",  // earthy ember — rare emphasis only
+          flame:    "#F4A261",  // warm golden-orange hover
           candle:   "#FFD8A8",  // soft accent
           amber:    "#CC5500",  // burnt amber — input text
           gold:     "#E6C79C",  // headings, logo

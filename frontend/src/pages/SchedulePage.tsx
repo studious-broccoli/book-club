@@ -3,6 +3,63 @@ import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import type { Book, Cadence, FinalSelection, MeetingDate } from "../types";
 
+// ── Timezone helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Convert a date + time string entered in a given IANA timezone to a UTC ISO string.
+ * Uses the "double-naive" trick: treat the input as UTC, compute how far off that
+ * is from the target timezone at that moment, then correct.
+ */
+function toUTC(dateStr: string, timeStr: string, tz: string): string {
+  const naive = new Date(`${dateStr}T${timeStr}:00Z`);
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(naive);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  const h = get("hour") === "24" ? "00" : get("hour");
+  const tzView = new Date(
+    `${get("year")}-${get("month")}-${get("day")}T${h}:${get("minute")}:${get("second")}Z`
+  );
+  return new Date(2 * naive.getTime() - tzView.getTime()).toISOString();
+}
+
+/** Convert a UTC ISO string to a date + time in the given IANA timezone. */
+function utcToLocal(utcStr: string, tz: string): { date: string; time: string } {
+  const d = new Date(utcStr);
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit",
+    hour12: false,
+  });
+  const parts = fmt.formatToParts(d);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  const h = get("hour") === "24" ? "00" : get("hour");
+  return {
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+    time: `${h}:${get("minute")}`,
+  };
+}
+
+const TZ_OPTIONS = [
+  { value: "America/New_York",     label: "ET (Eastern)" },
+  { value: "America/Chicago",      label: "CT (Central)" },
+  { value: "America/Denver",       label: "MT (Mountain)" },
+  { value: "America/Los_Angeles",  label: "PT (Pacific)" },
+];
+
+/** Detect the user's IANA timezone, falling back to ET if unknown. */
+function detectTz(): string {
+  const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return TZ_OPTIONS.some((o) => o.value === detected) ? detected : "America/New_York";
+}
+
+// ── Display formatters ────────────────────────────────────────────────────────
+
 function formatDateET(utc: string) {
   return new Date(utc).toLocaleString("en-US", {
     timeZone: "America/New_York",
@@ -23,6 +80,8 @@ function formatTimeMT(utc: string) {
     timeZoneName: "short",
   });
 }
+
+// ── Cadence helpers ───────────────────────────────────────────────────────────
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const WEEK_LABELS: Record<number, string> = { 1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "Last" };
@@ -56,8 +115,12 @@ function describeCadence(c: Cadence): string {
   return freq + time;
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
+
 const inputCls = "w-full border border-app-border bg-app-raised rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-coven-ember placeholder-gray-500";
 const labelCls = "block text-xs text-gray-400 mb-1";
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SchedulePage() {
   const { user } = useAuth();
@@ -65,7 +128,7 @@ export default function SchedulePage() {
 
   const [dates, setDates] = useState<MeetingDate[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ date: "", time: "", label: "" });
+  const [form, setForm] = useState({ date: "", time: "", timezone: detectTz(), label: "" });
   const [error, setError] = useState("");
 
   const [cadence, setCadence] = useState<Cadence | null | undefined>(undefined);
@@ -77,7 +140,7 @@ export default function SchedulePage() {
   const [finalSel, setFinalSel] = useState<FinalSelection | null | undefined>(undefined);
   const [showFinalForm, setShowFinalForm] = useState(false);
   const [books, setBooks] = useState<Book[]>([]);
-  const [finalForm, setFinalForm] = useState({ book_id: "", date: "", time: "", notes: "" });
+  const [finalForm, setFinalForm] = useState({ book_id: "", date: "", time: "", timezone: "America/New_York", notes: "" });
   const [finalError, setFinalError] = useState("");
 
   useEffect(() => {
@@ -93,13 +156,13 @@ export default function SchedulePage() {
     e.preventDefault();
     setError("");
     try {
-      const localDt = new Date(`${form.date}T${form.time}:00`);
+      const datetime_utc = toUTC(form.date, form.time, form.timezone);
       const res = await api.post<MeetingDate>("/dates", {
-        datetime_utc: localDt.toISOString(),
+        datetime_utc,
         label: form.label || null,
       });
       setDates((prev) => [...prev, res.data].sort((a, b) => a.datetime_utc.localeCompare(b.datetime_utc)));
-      setForm({ date: "", time: "", label: "" });
+      setForm({ date: "", time: "", timezone: detectTz(), label: "" });
       setShowForm(false);
     } catch {
       setError("Failed to add date.");
@@ -115,6 +178,21 @@ export default function SchedulePage() {
   async function handleAvailability(dateId: number, status: "yes" | "no" | null) {
     const res = await api.post<MeetingDate>(`/dates/${dateId}/availability`, { status });
     setDates((prev) => prev.map((d) => (d.id === dateId ? res.data : d)));
+  }
+
+  async function handlePick(dateId: number) {
+    const d = dates.find((date) => date.id === dateId);
+    if (!d || !confirm("Set this as the confirmed meeting time?")) return;
+    try {
+      const res = await api.put<FinalSelection>("/clubs/final-selection", {
+        book_id: finalSel?.book_id ?? null,
+        confirmed_datetime: d.datetime_utc,
+        notes: finalSel?.notes ?? null,
+      });
+      setFinalSel(res.data);
+    } catch {
+      // no-op
+    }
   }
 
   // ── Cadence ───────────────────────────────────────────────────────────────
@@ -156,14 +234,20 @@ export default function SchedulePage() {
   // ── Final selection ───────────────────────────────────────────────────────
 
   function openFinalForm() {
+    const tz = "America/New_York"; // always show confirmed time in ET for editing
     if (finalSel) {
-      const dt = finalSel.confirmed_datetime ? new Date(finalSel.confirmed_datetime) : null;
+      const { date, time } = finalSel.confirmed_datetime
+        ? utcToLocal(finalSel.confirmed_datetime, tz)
+        : { date: "", time: "" };
       setFinalForm({
         book_id: finalSel.book_id !== null ? String(finalSel.book_id) : "",
-        date: dt ? dt.toISOString().slice(0, 10) : "",
-        time: dt ? `${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}` : "",
+        date,
+        time,
+        timezone: tz,
         notes: finalSel.notes ?? "",
       });
+    } else {
+      setFinalForm({ book_id: "", date: "", time: "", timezone: tz, notes: "" });
     }
     setShowFinalForm(true);
   }
@@ -172,10 +256,10 @@ export default function SchedulePage() {
     e.preventDefault();
     setFinalError("");
     try {
-      let confirmed_datetime: string | null = null;
-      if (finalForm.date && finalForm.time) {
-        confirmed_datetime = new Date(`${finalForm.date}T${finalForm.time}:00`).toISOString();
-      }
+      const confirmed_datetime =
+        finalForm.date && finalForm.time
+          ? toUTC(finalForm.date, finalForm.time, finalForm.timezone)
+          : null;
       const res = await api.put<FinalSelection>("/clubs/final-selection", {
         book_id: finalForm.book_id ? Number(finalForm.book_id) : null,
         confirmed_datetime,
@@ -190,8 +274,13 @@ export default function SchedulePage() {
 
   async function handleDeleteFinal() {
     if (!confirm("Clear the final selection?")) return;
-    await api.delete("/clubs/final-selection");
-    setFinalSel(null);
+    try {
+      await api.delete("/clubs/final-selection");
+      setFinalSel(null);
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      alert(typeof detail === "string" ? detail : JSON.stringify(err?.response?.data ?? err?.message ?? "Failed to clear"));
+    }
   }
 
   const showWeekOfMonth = cadenceForm.frequency === "monthly";
@@ -335,13 +424,24 @@ export default function SchedulePage() {
                 />
               </div>
               <div>
-                <label className={labelCls}>Time (your local time)</label>
-                <input
-                  type="time"
-                  value={finalForm.time}
-                  onChange={(e) => setFinalForm((f) => ({ ...f, time: e.target.value }))}
-                  className={inputCls}
-                />
+                <label className={labelCls}>Time</label>
+                <div className="flex gap-2">
+                  <input
+                    type="time"
+                    value={finalForm.time}
+                    onChange={(e) => setFinalForm((f) => ({ ...f, time: e.target.value }))}
+                    className={inputCls}
+                  />
+                  <select
+                    value={finalForm.timezone}
+                    onChange={(e) => setFinalForm((f) => ({ ...f, timezone: e.target.value }))}
+                    className="border border-app-border bg-app-raised rounded-lg px-2 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-coven-ember shrink-0"
+                  >
+                    {TZ_OPTIONS.map((tz) => (
+                      <option key={tz.value} value={tz.value}>{tz.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div>
                 <label className={labelCls}>Notes (optional)</label>
@@ -371,24 +471,37 @@ export default function SchedulePage() {
         )}
 
         {!showFinalForm && finalSel ? (
-          <div className="bg-green-900/20 border border-green-700/50 rounded-xl p-4 space-y-0.5">
-            {finalSel.book_title && (
-              <p className="font-semibold text-white">{finalSel.book_title}{finalSel.book_author ? ` — ${finalSel.book_author}` : ""}</p>
-            )}
-            {finalSel.confirmed_datetime && (
-              <p className="text-sm text-green-400 font-medium">{formatDateET(finalSel.confirmed_datetime)}</p>
-            )}
-            {finalSel.confirmed_datetime && (
-              <p className="text-sm text-gray-400">{formatTimeMT(finalSel.confirmed_datetime)}</p>
-            )}
-            {finalSel.notes && <p className="text-sm text-gray-400 pt-1">{finalSel.notes}</p>}
+          <div className="bg-green-900/20 border border-green-700/50 rounded-xl p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-0.5">
+                {finalSel.book_title && (
+                  <p className="font-semibold text-white">{finalSel.book_title}{finalSel.book_author ? ` — ${finalSel.book_author}` : ""}</p>
+                )}
+                {finalSel.confirmed_datetime && (
+                  <p className="text-sm text-green-400 font-medium">{formatDateET(finalSel.confirmed_datetime)}</p>
+                )}
+                {finalSel.confirmed_datetime && (
+                  <p className="text-sm text-gray-400">{formatTimeMT(finalSel.confirmed_datetime)}</p>
+                )}
+                {finalSel.notes && <p className="text-sm text-gray-400 pt-1">{finalSel.notes}</p>}
+              </div>
+              {isAdmin && (
+                <button
+                  onClick={handleDeleteFinal}
+                  className="shrink-0 text-gray-500 hover:text-red-400 transition-colors text-sm"
+                  title="Cancel confirmed meeting"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
         ) : !showFinalForm && (
           <p className="text-sm text-gray-500">No confirmed meeting yet.</p>
         )}
       </div>
 
-      {/* ── Proposed dates — open to all members ── */}
+      {/* ── Proposed dates ── */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -418,14 +531,25 @@ export default function SchedulePage() {
                 />
               </div>
               <div>
-                <label className={labelCls}>Time (your local time)</label>
-                <input
-                  type="time"
-                  value={form.time}
-                  onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
-                  className={inputCls}
-                  required
-                />
+                <label className={labelCls}>Time</label>
+                <div className="flex gap-2">
+                  <input
+                    type="time"
+                    value={form.time}
+                    onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
+                    className={inputCls}
+                    required
+                  />
+                  <select
+                    value={form.timezone}
+                    onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value }))}
+                    className="border border-app-border bg-app-raised rounded-lg px-2 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-coven-ember shrink-0"
+                  >
+                    {TZ_OPTIONS.map((tz) => (
+                      <option key={tz.value} value={tz.value}>{tz.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div>
                 <label className={labelCls}>Label (optional)</label>
@@ -460,6 +584,7 @@ export default function SchedulePage() {
               isAdmin={isAdmin}
               onAvailability={handleAvailability}
               onDelete={handleDelete}
+              onPick={isAdmin ? handlePick : undefined}
             />
           ))}
         </div>
@@ -468,18 +593,22 @@ export default function SchedulePage() {
   );
 }
 
+// ── DateCard ──────────────────────────────────────────────────────────────────
+
 function DateCard({
   date,
   currentUserId: _currentUserId,
   isAdmin,
   onAvailability,
   onDelete,
+  onPick,
 }: {
   date: MeetingDate;
   currentUserId: number;
   isAdmin: boolean;
   onAvailability: (id: number, status: "yes" | "no" | null) => void;
   onDelete: (id: number) => void;
+  onPick?: (id: number) => void;
 }) {
   const { yes, total } = date.availability_summary;
 
@@ -491,10 +620,18 @@ function DateCard({
           <p className="text-sm text-gray-400">{formatTimeMT(date.datetime_utc)}</p>
           {date.label && <p className="text-sm text-gray-400 mt-0.5">{date.label}</p>}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <span className="text-sm font-medium text-gray-400">
             {yes}/{total} available
           </span>
+          {isAdmin && onPick && (
+            <button
+              onClick={() => onPick(date.id)}
+              className="text-xs px-2.5 py-1.5 rounded-lg font-medium bg-coven-amethyst/20 text-coven-lavender hover:bg-coven-amethyst/40 transition-colors"
+            >
+              ✓ Pick
+            </button>
+          )}
           {isAdmin && (
             <button
               onClick={() => onDelete(date.id)}

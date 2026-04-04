@@ -38,12 +38,14 @@ function getMonths(count: number): { year: number; month: number }[] {
 function DateCell({
   dateStr,
   isToday,
+  isPast,
   slotStatuses,
   onMouseDown,
   onMouseEnter,
 }: {
   dateStr: string;
   isToday: boolean;
+  isPast: boolean;
   slotStatuses: Partial<Record<TimeSlot, Status>>;
   onMouseDown: (d: string) => void;
   onMouseEnter: (d: string) => void;
@@ -54,13 +56,17 @@ function DateCell({
 
   return (
     <div
-      className={`relative w-10 rounded-md border cursor-pointer select-none transition-colors overflow-hidden ${
-        hasAny ? "border-app-border2" : "border-app-border hover:border-app-border2"
+      className={`relative w-10 rounded-md border select-none overflow-hidden transition-colors ${
+        isPast
+          ? "opacity-30 cursor-not-allowed border-app-border"
+          : hasAny
+            ? "border-app-border2 cursor-pointer"
+            : "border-app-border hover:border-app-border2 cursor-pointer"
       } ${todayRing}`}
-      onMouseDown={() => onMouseDown(dateStr)}
-      onMouseEnter={() => onMouseEnter(dateStr)}
+      onMouseDown={() => !isPast && onMouseDown(dateStr)}
+      onMouseEnter={() => !isPast && onMouseEnter(dateStr)}
     >
-      <div className={`text-center text-[10px] py-0.5 font-medium ${hasAny ? "text-gray-300" : "text-gray-500"}`}>
+      <div className={`text-center text-[10px] py-0.5 font-medium ${hasAny && !isPast ? "text-gray-300" : "text-gray-500"}`}>
         {day}
       </div>
       {ALL_SLOTS.map((slot) => {
@@ -125,6 +131,7 @@ function MonthCard({
               key={dateStr}
               dateStr={dateStr}
               isToday={dateStr === todayStr}
+              isPast={dateStr < todayStr}
               slotStatuses={availability[dateStr] ?? {}}
               onMouseDown={onMouseDown}
               onMouseEnter={onMouseEnter}
@@ -149,6 +156,9 @@ export default function AvailabilityPage() {
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDragging = useRef(false);
   const months = getMonths(6);
+
+  const today = new Date();
+  const todayStr = toDateStr(today.getFullYear(), today.getMonth(), today.getDate());
 
   useEffect(() => {
     api.get<{ date: string; time_slot: string; status: string }[]>("/availability/me").then((res) => {
@@ -186,6 +196,7 @@ export default function AvailabilityPage() {
   }
 
   async function applyDate(dateStr: string) {
+    if (dateStr < todayStr) return;  // past dates are read-only
     if (activeSlots.size === 0) return;
 
     const allMatch = [...activeSlots].every(
@@ -238,6 +249,7 @@ export default function AvailabilityPage() {
         const dow = new Date(year, month, d).getDay();
         if (dow === 0 || dow === 6) {
           const dateStr = toDateStr(year, month, d);
+          if (dateStr < todayStr) continue;  // skip past weekends
           if (!newMap[dateStr]) newMap[dateStr] = {};
           ALL_SLOTS.forEach((slot) => {
             newMap[dateStr][slot] = "available";

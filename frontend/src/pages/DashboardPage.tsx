@@ -84,9 +84,9 @@ export default function DashboardPage() {
 
       {/* ── Current pick (winner book) ── */}
       {winner && (
-        <section className="bg-coven-ember/10 border border-coven-ember/30 rounded-xl p-5">
-          <p className="text-xs font-semibold text-coven-ember uppercase tracking-wide mb-1">Current pick</p>
-          <p className="text-lg font-bold text-white">{winner.title}</p>
+        <section className="bg-coven-gold/5 border border-coven-gold/20 rounded-xl p-5">
+          <p className="text-xs font-semibold text-coven-amethyst uppercase tracking-wide mb-1">Current pick</p>
+          <p className="text-lg font-bold text-coven-lavender">{winner.title}</p>
           <p className="text-sm text-gray-400">{winner.author}{winner.pages ? ` · ${winner.pages} pages` : ""}</p>
         </section>
       )}
@@ -103,8 +103,8 @@ export default function DashboardPage() {
       {/* ── Next proposed date ── */}
       {nextDate && (
         <section className="bg-app-surface border border-app-border rounded-xl p-5">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Next proposed date</p>
-          <p className="text-base font-semibold text-white">{formatDate(nextDate.datetime_utc)}</p>
+          <p className="text-xs font-semibold text-coven-silver uppercase tracking-wide mb-1">Next proposed date</p>
+          <p className="text-base font-semibold text-coven-spelgold">{formatDate(nextDate.datetime_utc)}</p>
           {nextDate.label && <p className="text-sm text-gray-400 mt-0.5">{nextDate.label}</p>}
           <p className="text-sm text-gray-400 mt-2">
             {nextDate.availability_summary.yes} of {members.length || "?"} available
@@ -138,7 +138,7 @@ export default function DashboardPage() {
         >
           <div className="flex items-center gap-2">
             <span className="text-coven-silver">✦</span>
-            <span className="text-sm font-semibold text-coven-dragon">How to use The Spicy Book Coven</span>
+            <span className="text-sm font-semibold text-coven-lavender">How to use The Spicy Book Coven</span>
           </div>
           <span className="text-gray-500 text-xs">{showHowTo ? "▲ hide" : "▼ show"}</span>
         </button>
@@ -328,7 +328,7 @@ function VotingPoll({
               key={opt.book_id}
               className={`rounded-lg border p-3 ${
                 isWinner
-                  ? "border-coven-ember/50 bg-coven-ember/10"
+                  ? "border-coven-amethyst/50 bg-coven-amethyst/10"
                   : "border-app-border bg-app-raised"
               }`}
             >
@@ -336,7 +336,7 @@ function VotingPoll({
                 <div>
                   <span className="font-medium text-white text-sm">{opt.title}</span>
                   <span className="text-gray-400 text-xs ml-2">{opt.author}</span>
-                  {isWinner && <span className="ml-2 text-xs font-semibold text-coven-ember">Winner! 🎉</span>}
+                  {isWinner && <span className="ml-2 text-xs font-semibold text-coven-lavender">Winner! 🎉</span>}
                 </div>
                 {poll.is_complete && (
                   <span className="text-xs text-gray-500">{opt.vote_count} vote{opt.vote_count !== 1 ? "s" : ""}</span>
@@ -346,7 +346,7 @@ function VotingPoll({
               {poll.is_complete && (
                 <div className="w-full h-1.5 bg-app-border rounded-full overflow-hidden mb-2">
                   <div
-                    className={`h-full rounded-full transition-all ${isWinner ? "bg-coven-ember" : "bg-app-border2"}`}
+                    className={`h-full rounded-full transition-all ${isWinner ? "bg-coven-amethyst" : "bg-app-border2"}`}
                     style={{ width: `${(opt.vote_count / maxVotes) * 100}%` }}
                   />
                 </div>
@@ -359,7 +359,7 @@ function VotingPoll({
                   className={`text-xs px-3 py-1 rounded-md font-medium transition-colors disabled:opacity-50 ${
                     opt.user_voted
                       ? "bg-coven-amethyst/40 text-coven-lavender"
-                      : "bg-app-border text-gray-400 hover:bg-coven-ember/20 hover:text-coven-ember"
+                      : "bg-app-border text-gray-400 hover:bg-coven-lavender/20 hover:text-coven-lavender"
                   }`}
                 >
                   {opt.user_voted ? "✓ Your vote" : "Vote"}
@@ -387,7 +387,7 @@ function StatCard({ label, value, to }: { label: string; value: number; to: stri
   return (
     <Link
       to={to}
-      className="bg-app-surface border border-app-border rounded-xl p-5 hover:border-coven-ember/50 transition-colors"
+      className="bg-app-surface border border-app-border rounded-xl p-5 hover:border-coven-lavender/50 transition-colors"
     >
       <p className="text-3xl font-bold text-coven-spelgold">{value}</p>
       <p className="text-sm text-gray-400 mt-1">{label}</p>

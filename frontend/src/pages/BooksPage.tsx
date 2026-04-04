@@ -207,7 +207,7 @@ function BookCard({
     <div
       className={`border rounded-xl p-4 flex items-start justify-between gap-4 ${
         book.is_winner
-          ? "border-coven-ember/40 bg-coven-ember/10"
+          ? "border-coven-lavender/40 bg-coven-lavender/10"
           : "border-app-border bg-app-surface"
       }`}
     >
@@ -216,7 +216,7 @@ function BookCard({
         <div className="flex items-center gap-2 flex-wrap">
           <p className="font-semibold text-white">{book.title}</p>
           {book.is_winner && (
-            <span className="text-xs bg-coven-ember text-white px-2 py-0.5 rounded-full shrink-0">Winner 🎉</span>
+            <span className="text-xs bg-coven-mystic text-white px-2 py-0.5 rounded-full shrink-0">Winner 🎉</span>
           )}
         </div>
         <p className="text-sm text-gray-400 mt-0.5">
@@ -414,7 +414,7 @@ export default function BooksPage() {
       {/* Current pick */}
       {winner && (
         <section>
-          <p className="text-xs font-semibold text-coven-ember uppercase tracking-wide mb-2">Current pick</p>
+          <p className="text-xs font-semibold text-coven-amethyst uppercase tracking-wide mb-2">Current pick</p>
           <BookCard
             book={winner}
             currentUserId={user?.id ?? 0}
