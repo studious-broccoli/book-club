@@ -138,7 +138,7 @@ function RankingPanel({
         <button
           onClick={handleSave}
           disabled={saving}
-          className="bg-coven-ember hover:bg-coven-flame text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+          className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
         >
           {saving ? "Saving…" : saved ? "Saved ✓" : "Save ranking"}
         </button>
@@ -351,7 +351,7 @@ export default function BooksPage() {
           )}
           <button
             onClick={() => setShowForm((v) => !v)}
-            className="bg-coven-ember hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
           >
             {showForm ? "Cancel" : "+ Suggest book"}
           </button>
@@ -399,7 +399,7 @@ export default function BooksPage() {
           {error && <p className="text-red-400 text-sm">{error}</p>}
           <button
             type="submit"
-            className="bg-coven-ember hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
           >
             Add book
           </button>

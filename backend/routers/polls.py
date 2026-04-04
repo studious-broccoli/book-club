@@ -29,8 +29,48 @@ def _total_members(db: Session, club_id: int) -> int:
     return db.query(ClubMembership).filter(ClubMembership.club_id == club_id).count()
 
 
+def _ranking_tiebreaker(db: Session, club_id: int, tied_ids: list[int]) -> int:
+    """Break a vote tie using members' personal book rankings.
+
+    For each tied book, compute its average rank position across all members
+    who submitted a ranking. Members who did not rank a book are assigned a
+    penalty equal to one position beyond the longest ranking list, so ranked
+    books always beat unranked ones. The book with the lowest (best) average
+    rank wins. Falls back to the first tied book if no rankings exist.
+
+    Args:
+        db: The database session.
+        club_id: The club to look up rankings for.
+        tied_ids: The book IDs that are tied on vote count.
+
+    Returns:
+        The book_id that wins the tiebreaker.
+    """
+    rankings = db.query(BookRanking).filter(BookRanking.club_id == club_id).all()
+    if not rankings:
+        return tied_ids[0]
+
+    all_book_ids_in_rankings: list[int] = []
+    for r in rankings:
+        all_book_ids_in_rankings.extend(json.loads(r.book_ids_ordered))
+    penalty = len(all_book_ids_in_rankings) + 1
+
+    scores: dict[int, float] = {}
+    for book_id in tied_ids:
+        positions = []
+        for r in rankings:
+            ordered: list[int] = json.loads(r.book_ids_ordered)
+            positions.append(ordered.index(book_id) + 1 if book_id in ordered else penalty)
+        scores[book_id] = sum(positions) / len(positions)
+
+    return min(tied_ids, key=lambda bid: scores[bid])
+
+
 def _finalize_poll_winner(db: Session, poll: Poll, tally: dict[int, int]) -> None:
     """Persist the poll winner and mark the book as is_winner (idempotent).
+
+    In a tie, the winner is determined by members' personal book rankings —
+    the tied book with the best average rank position across all members wins.
 
     Args:
         db: The database session.
@@ -39,7 +79,9 @@ def _finalize_poll_winner(db: Session, poll: Poll, tally: dict[int, int]) -> Non
     """
     if poll.winner_book_id is not None or not tally:
         return
-    winner_id = max(tally, key=lambda bid: tally[bid])
+    max_votes = max(tally.values())
+    tied = [bid for bid, votes in tally.items() if votes == max_votes]
+    winner_id = tied[0] if len(tied) == 1 else _ranking_tiebreaker(db, poll.club_id, tied)
     poll.winner_book_id = winner_id
     # Mark winning book and clear any previous winners in the club
     club_books = db.query(Book).filter(Book.club_id == poll.club_id).all()

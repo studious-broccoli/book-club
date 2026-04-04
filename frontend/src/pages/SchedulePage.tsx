@@ -273,7 +273,7 @@ export default function SchedulePage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <button type="submit" className="bg-coven-ember hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+              <button type="submit" className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
                 Save
               </button>
               <button type="button" onClick={() => setShowCadenceForm(false)} className="text-sm px-4 py-2 rounded-lg border border-app-border text-gray-400 hover:bg-app-raised">
@@ -355,7 +355,7 @@ export default function SchedulePage() {
             </div>
             {finalError && <p className="text-red-400 text-sm">{finalError}</p>}
             <div className="flex gap-2">
-              <button type="submit" className="bg-coven-ember hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+              <button type="submit" className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
                 Save
               </button>
               <button type="button" onClick={() => setShowFinalForm(false)} className="text-sm px-4 py-2 rounded-lg border border-app-border text-gray-400 hover:bg-app-raised">
@@ -397,7 +397,7 @@ export default function SchedulePage() {
           </div>
           <button
             onClick={() => setShowForm((v) => !v)}
-            className="bg-coven-ember hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
           >
             {showForm ? "Cancel" : "+ Propose date"}
           </button>
@@ -440,7 +440,7 @@ export default function SchedulePage() {
             {error && <p className="text-red-400 text-sm">{error}</p>}
             <button
               type="submit"
-              className="bg-coven-ember hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
             >
               Add date
             </button>

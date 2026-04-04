@@ -274,7 +274,7 @@ function VotingPoll({
             <button
               type="submit"
               disabled={creating}
-              className="bg-coven-ember hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+              className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
             >
               {creating ? "Starting…" : "Start poll"}
             </button>

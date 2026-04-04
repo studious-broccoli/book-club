@@ -121,7 +121,7 @@ export default function SettingsModal({ onClose }: Props) {
             <button
               type="submit"
               disabled={saving || saved}
-              className="bg-coven-ember hover:bg-coven-flame text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-60"
+              className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-60"
             >
               {saved ? "Saved ✓" : saving ? "Saving…" : "Save"}
             </button>

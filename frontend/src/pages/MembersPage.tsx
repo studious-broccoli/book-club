@@ -193,7 +193,7 @@ export default function MembersPage() {
             </div>
             <button
               onClick={() => { setShowClubForm((v) => !v); setClubError(""); setClubCreated(""); }}
-              className="bg-coven-ember hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
             >
               {showClubForm ? "Cancel" : "+ New club"}
             </button>
@@ -220,7 +220,7 @@ export default function MembersPage() {
                 />
               </div>
               {clubError && <p className="text-red-400 text-sm">{clubError}</p>}
-              <button type="submit" className="bg-coven-ember hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+              <button type="submit" className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
                 Create club
               </button>
             </form>
@@ -256,7 +256,7 @@ export default function MembersPage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => openAddForm(club.club_id)}
-                    className="bg-coven-ember hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                    className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
                   >
                     {addingToClub === club.club_id ? "Cancel" : "+ Add member"}
                   </button>
@@ -327,7 +327,7 @@ export default function MembersPage() {
                       />
                     </div>
                     {addError && <p className="text-red-400 text-sm">{addError}</p>}
-                    <button type="submit" className="bg-coven-ember hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                    <button type="submit" className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
                       Add member
                     </button>
                   </form>
@@ -365,7 +365,7 @@ export default function MembersPage() {
                           type="button"
                           onClick={() => handleAddExisting(club.club_id)}
                           disabled={!selectedUserId}
-                          className="bg-coven-ember hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-40"
+                          className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-40"
                         >
                           Add to {club.club_name}
                         </button>

@@ -17,12 +17,13 @@ from schemas import (
 router = APIRouter()
 
 
-def _build_date_out(meeting: MeetingDate, membership: ClubMembership) -> MeetingDateOut:
+def _build_date_out(meeting: MeetingDate, membership: ClubMembership, db: Session) -> MeetingDateOut:
     """Serialize a MeetingDate ORM object into a MeetingDateOut schema.
 
     Args:
         meeting: The SQLAlchemy MeetingDate instance.
         membership: The current user's club membership.
+        db: The database session, used to resolve club display names.
 
     Returns:
         A MeetingDateOut instance with availability details.
@@ -32,7 +33,8 @@ def _build_date_out(meeting: MeetingDate, membership: ClubMembership) -> Meeting
     my_status = next(
         (a.status for a in meeting.availabilities if a.user_id == membership.user_id), None
     )
-    member_display: dict[int, str] = {cm.user_id: cm.display_name for cm in meeting.club.memberships}
+    club_memberships = db.query(ClubMembership).filter(ClubMembership.club_id == meeting.club_id).all()
+    member_display: dict[int, str] = {cm.user_id: cm.display_name for cm in club_memberships}
     entries = [
         AvailabilityEntry(
             user_id=a.user_id,
@@ -67,7 +69,7 @@ def list_dates(
         A list of MeetingDateOut objects ordered by date.
     """
     dates = db.query(MeetingDate).filter(MeetingDate.club_id == membership.club_id).order_by(MeetingDate.datetime_utc).all()
-    return [_build_date_out(d, membership) for d in dates]
+    return [_build_date_out(d, membership, db) for d in dates]
 
 
 @router.post("", response_model=MeetingDateOut, status_code=status.HTTP_201_CREATED)
@@ -95,7 +97,7 @@ def create_date(
     db.add(meeting)
     db.commit()
     db.refresh(meeting)
-    return _build_date_out(meeting, membership)
+    return _build_date_out(meeting, membership, db)
 
 
 @router.delete("/{date_id}")
@@ -165,4 +167,4 @@ def set_availability(
 
     db.commit()
     db.refresh(meeting)
-    return _build_date_out(meeting, membership)
+    return _build_date_out(meeting, membership, db)

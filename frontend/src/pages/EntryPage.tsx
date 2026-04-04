@@ -91,7 +91,7 @@ export default function EntryPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-coven-ember hover:bg-coven-flame text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+                className="w-full bg-coven-dragon hover:bg-coven-flame text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
               >
                 {loading ? "Checking..." : "Enter"}
               </button>
