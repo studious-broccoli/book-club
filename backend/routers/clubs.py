@@ -1,17 +1,23 @@
 from __future__ import annotations
 
+import json
+import random
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from auth import get_current_membership, get_current_user_id, require_club_admin, require_global_admin
+from auth import get_current_membership, get_current_user_id, hash_password, require_club_admin, require_global_admin
 from database import get_db
 from models import (
+    Book,
+    BookRanking,
     Club,
     ClubCadence,
     ClubMembership,
     FinalSelection,
+    MeetingDate,
+    Poll,
     User,
     UserAvailability,
 )
@@ -20,12 +26,18 @@ from schemas import (
     CadenceOut,
     ClubCreate,
     ClubEntryOut,
+    ClubMemberAdd,
     ClubMemberOut,
     ClubOut,
     FinalSelectionIn,
     FinalSelectionOut,
     GroupAvailabilityDay,
+    MemberWithPreferences,
+    PreferencesOut,
+    SlotCounts,
 )
+
+HEART_EMOJIS = ["💜", "💙", "💚", "💛", "🧡", "❤️", "🩷", "🩵", "💖", "💗"]
 
 router = APIRouter()
 
@@ -69,6 +81,7 @@ def create_club(
     payload: ClubCreate,
     db: Session = Depends(get_db),
     admin: User = Depends(require_global_admin),
+    membership: ClubMembership = Depends(get_current_membership),
 ) -> ClubOut:
     """Create a new club (global admin only).
 
@@ -91,16 +104,180 @@ def create_club(
     db.add(club)
     db.flush()
 
+    admin_display = membership.display_name
     membership = ClubMembership(
         user_id=admin.id,
         club_id=club.id,
-        display_name=admin.username,
+        display_name=admin_display,
         role="admin",
     )
     db.add(membership)
     db.commit()
     db.refresh(club)
     return ClubOut(id=club.id, name=club.name)
+
+
+@router.delete("/{club_id}")
+def delete_club(
+    club_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_global_admin),
+) -> dict:
+    """Delete a club and all its data (global admin only).
+
+    Args:
+        club_id: The ID of the club to delete.
+        db: The database session.
+        admin: The authenticated global admin user.
+
+    Returns:
+        A confirmation dict.
+
+    Raises:
+        HTTPException: If the club is not found.
+    """
+    club = db.query(Club).filter(Club.id == club_id).first()
+    if not club:
+        raise HTTPException(status_code=404, detail="Club not found")
+
+    # Delete dependent records that don't cascade automatically
+    polls = db.query(Poll).filter(Poll.club_id == club_id).all()
+    for p in polls:
+        db.delete(p)
+    db.flush()
+
+    books = db.query(Book).filter(Book.club_id == club_id).all()
+    for b in books:
+        db.delete(b)
+    db.flush()
+
+    dates = db.query(MeetingDate).filter(MeetingDate.club_id == club_id).all()
+    for d in dates:
+        db.delete(d)
+    db.flush()
+
+    db.query(BookRanking).filter(BookRanking.club_id == club_id).delete()
+    db.query(ClubCadence).filter(ClubCadence.club_id == club_id).delete()
+    db.query(FinalSelection).filter(FinalSelection.club_id == club_id).delete()
+    db.flush()
+
+    db.delete(club)  # cascades ClubMemberships
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/{club_id}/members", response_model=MemberWithPreferences, status_code=status.HTTP_201_CREATED)
+def add_member_to_club(
+    club_id: int,
+    payload: ClubMemberAdd,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_global_admin),
+) -> MemberWithPreferences:
+    """Add an existing or new user to a specific club (global admin only).
+
+    If the username already exists the user is added to the club without
+    creating a new account (password is ignored). If the user does not exist
+    a new account is created — password is required in that case.
+
+    Args:
+        club_id: The ID of the target club.
+        payload: Member details; password only required for new users.
+        db: The database session.
+        admin: The authenticated global admin user.
+
+    Returns:
+        The created MemberWithPreferences object.
+
+    Raises:
+        HTTPException: If the club does not exist, the user is already a member,
+            or no password is provided for a new user.
+    """
+    club = db.query(Club).filter(Club.id == club_id).first()
+    if not club:
+        raise HTTPException(status_code=404, detail="Club not found")
+
+    user = db.query(User).filter(User.username == payload.username).first()
+    if not user:
+        if not payload.password:
+            raise HTTPException(status_code=400, detail="Password is required for new users")
+        user = User(
+            username=payload.username,
+            email=payload.email,
+            hashed_password=hash_password(payload.password),
+            role="member",
+            heart_color=random.choice(HEART_EMOJIS),
+        )
+        db.add(user)
+        db.flush()
+
+    already = db.query(ClubMembership).filter(
+        ClubMembership.user_id == user.id,
+        ClubMembership.club_id == club_id,
+    ).first()
+    if already:
+        raise HTTPException(status_code=400, detail="User is already a member of this club")
+
+    new_membership = ClubMembership(
+        user_id=user.id,
+        club_id=club_id,
+        display_name=payload.display_name,
+        role="member",
+    )
+    db.add(new_membership)
+    db.commit()
+    db.refresh(new_membership)
+
+    prefs = new_membership.user.preferences
+    prefs_out = (
+        PreferencesOut(
+            no_weeknights=prefs.no_weeknights,
+            preferred_days=json.loads(prefs.preferred_days) if prefs.preferred_days else [],
+            notes=prefs.notes,
+            blackout_dates=json.loads(prefs.blackout_dates) if prefs.blackout_dates else [],
+        )
+        if prefs else None
+    )
+    return MemberWithPreferences(
+        user_id=new_membership.user_id,
+        username=new_membership.user.username,
+        display_name=new_membership.display_name,
+        heart_color=new_membership.user.heart_color,
+        role=new_membership.role,
+        email=new_membership.user.email,
+        preferences=prefs_out,
+    )
+
+
+@router.delete("/{club_id}/members/{user_id}")
+def remove_member_from_club(
+    club_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_global_admin),
+) -> dict:
+    """Remove a member from a specific club (global admin only).
+
+    Args:
+        club_id: The ID of the target club.
+        user_id: The ID of the user to remove.
+        db: The database session.
+        admin: The authenticated global admin user.
+
+    Returns:
+        A confirmation dict.
+
+    Raises:
+        HTTPException: If the membership is not found.
+    """
+    target = db.query(ClubMembership).filter(
+        ClubMembership.user_id == user_id,
+        ClubMembership.club_id == club_id,
+    ).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Membership not found")
+    db.delete(target)
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/group-availability", response_model=list[GroupAvailabilityDay])
@@ -132,32 +309,35 @@ def get_group_availability(
         .all()
     )
 
-    # Group by date (collapse time slots — a member counts as "available" for a date
-    # if any of their slots is available)
-    date_user_map: dict[str, dict[int, str]] = {}
+    # Group by (date, time_slot) -> {user_id: status}
+    SLOTS = ("morning", "afternoon", "evening")
+    date_slot_map: dict[str, dict[str, dict[int, str]]] = {}
     for r in records:
-        if r.date not in date_user_map:
-            date_user_map[r.date] = {}
-        existing_status = date_user_map[r.date].get(r.user_id)
-        # Priority: available > tentative > unavailable
-        priority = {"available": 2, "tentative": 1, "unavailable": 0}
-        if existing_status is None or priority.get(r.status, 0) > priority.get(existing_status, 0):
-            date_user_map[r.date][r.user_id] = r.status
+        if r.date not in date_slot_map:
+            date_slot_map[r.date] = {s: {} for s in SLOTS}
+        date_slot_map[r.date][r.time_slot][r.user_id] = r.status
 
-    result = []
-    for d, user_statuses in sorted(date_user_map.items()):
+    def _slot_counts(user_statuses: dict[int, str]) -> SlotCounts:
         counts: dict[str, int] = {"available": 0, "tentative": 0, "unavailable": 0}
         for s in user_statuses.values():
             if s in counts:
                 counts[s] += 1
-        responded = sum(counts.values())
+        # Members who didn't mark this slot are treated as tentative.
+        counts["tentative"] += total_members - len(user_statuses)
+        return SlotCounts(
+            available=counts["available"],
+            tentative=counts["tentative"],
+            unavailable=counts["unavailable"],
+        )
+
+    result = []
+    for d, slots in sorted(date_slot_map.items()):
         result.append(
             GroupAvailabilityDay(
                 date=d,
-                available=counts["available"],
-                tentative=counts["tentative"],
-                unavailable=counts["unavailable"],
-                no_response=total_members - responded,
+                morning=_slot_counts(slots.get("morning", {})),
+                afternoon=_slot_counts(slots.get("afternoon", {})),
+                evening=_slot_counts(slots.get("evening", {})),
                 total_members=total_members,
             )
         )

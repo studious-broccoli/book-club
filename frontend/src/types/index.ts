@@ -11,6 +11,15 @@ export interface User {
   created_at: string;
 }
 
+export interface UserOut {
+  id: number;
+  username: string;
+  email: string | null;
+  heart_color: string;
+  role: "admin" | "member";
+  created_at: string;
+}
+
 export interface ClubMember {
   user_id: number;
   username: string;
@@ -93,12 +102,17 @@ export interface TokenResponse {
   user: User;
 }
 
-export interface GroupAvailabilityDay {
-  date: string;
+export interface SlotAvailability {
   available: number;
   tentative: number;
   unavailable: number;
-  no_response: number;
+}
+
+export interface GroupAvailabilityDay {
+  date: string;
+  morning: SlotAvailability;
+  afternoon: SlotAvailability;
+  evening: SlotAvailability;
   total_members: number;
 }
 

@@ -84,6 +84,23 @@ class UserCreate(BaseModel):
     role: str = "member"
 
 
+class ClubMemberAdd(BaseModel):
+    """Add an existing or new user to a specific club. Password required only for new users."""
+    username: str
+    display_name: str
+    password: str | None = None
+    email: str | None = None
+    role: str = "member"
+
+
+# ── Profile ───────────────────────────────────────────────────────────────────
+
+class ProfileUpdate(BaseModel):
+    display_name: str
+    email: str | None = None
+    heart_color: str | None = None
+
+
 # ── Preferences ───────────────────────────────────────────────────────────────
 
 class PreferencesIn(BaseModel):
@@ -185,12 +202,17 @@ class AvailabilitySetRequest(BaseModel):
 
 # ── Group Availability ────────────────────────────────────────────────────────
 
-class GroupAvailabilityDay(BaseModel):
-    date: str
+class SlotCounts(BaseModel):
     available: int
     tentative: int
     unavailable: int
-    no_response: int
+
+
+class GroupAvailabilityDay(BaseModel):
+    date: str
+    morning: SlotCounts
+    afternoon: SlotCounts
+    evening: SlotCounts
     total_members: int
 
 

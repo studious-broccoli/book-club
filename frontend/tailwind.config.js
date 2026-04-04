@@ -3,6 +3,9 @@ export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        script: ['"Alex Brush"', 'cursive'],
+      },
       colors: {
         app: {
           bg:      "#0B132B",  // Midnight Blue — page background
@@ -22,6 +25,7 @@ export default {
           amethyst: "#6D4AFF",  // active / selected
           dragon:   "#3A86B5",  // cool blue accent
           silver:   "#C9D6DF",  // light secondary text
+          mystic:   "#fa6bff",  // bright pink-purple — coven title accent
         },
       },
       keyframes: {

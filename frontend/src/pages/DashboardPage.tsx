@@ -39,14 +39,17 @@ export default function DashboardPage() {
         <div className="absolute inset-0 bg-gradient-to-br from-[#0B132B] via-[#1C2541] to-[#0F1F1A]" />
         <div className="absolute inset-0 pointer-events-none">
           <span className="absolute top-3 left-[15%] text-coven-gold text-base animate-twinkle">✦</span>
-          <span className="absolute top-5 right-[20%] text-coven-lavender text-xs animate-twinkle-slow">✦</span>
+          <span className="absolute top-5 right-[20%] text-coven-silver text-xs animate-twinkle-slow">✦</span>
           <span className="absolute bottom-4 left-[40%] text-coven-spelgold text-xs animate-twinkle-fast">✦</span>
           <span className="absolute top-8 left-[60%] text-coven-silver text-xs animate-twinkle">✦</span>
           <span className="absolute bottom-3 right-[35%] text-coven-gold text-sm animate-twinkle-slow">✦</span>
         </div>
         <div className="relative px-6 py-7">
-          <p className="text-xs font-semibold uppercase tracking-widest text-coven-ember/80 mb-1">Welcome to</p>
-          <h1 className="text-3xl font-bold text-coven-gold">{user?.club_name ?? "The Spicy Book Coven"}</h1>
+          <p className="text-xs font-semibold uppercase tracking-widest text-coven-silver mb-1">Welcome to</p>
+          <h1 className="font-script text-5xl text-coven-amber">The Spicy Book Coven</h1>
+          {user?.club_name && (
+            <p className="text-lg font-semibold text-coven-lavender mt-0.5">{user.club_name}</p>
+          )}
           {user && (
             <p className="text-sm mt-2 text-coven-silver">Hi {user.display_name}! {user.heart_color}</p>
           )}
@@ -106,7 +109,7 @@ export default function DashboardPage() {
           <p className="text-sm text-gray-400 mt-2">
             {nextDate.availability_summary.yes} of {members.length || "?"} available
           </p>
-          <Link to="/schedule" className="text-sm text-coven-lavender hover:text-coven-gold mt-1 inline-block transition-colors">
+          <Link to="/schedule" className="text-sm text-coven-lavender hover:text-coven-mystic mt-1 inline-block transition-colors">
             Mark your availability →
           </Link>
         </section>
@@ -116,14 +119,14 @@ export default function DashboardPage() {
       <div className="relative rounded-2xl overflow-hidden border border-app-border flex items-center justify-center py-8 bg-gradient-to-br from-[#0B132B] via-[#1C2541] to-[#0F1F1A]">
         <div className="absolute inset-0 pointer-events-none">
           <span className="absolute top-4 left-[10%] text-coven-gold text-lg animate-twinkle">✦</span>
-          <span className="absolute top-6 right-[12%] text-coven-lavender text-xs animate-twinkle-slow">✦</span>
+          <span className="absolute top-6 right-[12%] text-coven-silver text-xs animate-twinkle-slow">✦</span>
           <span className="absolute bottom-5 left-[45%] text-coven-spelgold text-xs animate-twinkle-fast">✦</span>
-          <span className="absolute bottom-4 right-[30%] text-coven-ember/60 text-sm animate-twinkle">✦</span>
+          <span className="absolute bottom-4 right-[30%] text-coven-gold text-sm animate-twinkle">✦</span>
         </div>
         <img
           src="/TheSpicyBookCovenArt.png"
           alt="The Spicy Book Coven"
-          className="relative h-64 object-contain animate-float"
+          className="relative h-[32rem] object-contain animate-float"
         />
       </div>
 
@@ -134,8 +137,8 @@ export default function DashboardPage() {
           className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-app-raised transition-colors"
         >
           <div className="flex items-center gap-2">
-            <span className="text-coven-gold">✦</span>
-            <span className="text-sm font-semibold text-coven-gold">How to use The Spicy Book Coven</span>
+            <span className="text-coven-silver">✦</span>
+            <span className="text-sm font-semibold text-coven-dragon">How to use The Spicy Book Coven</span>
           </div>
           <span className="text-gray-500 text-xs">{showHowTo ? "▲ hide" : "▼ show"}</span>
         </button>
@@ -251,7 +254,7 @@ function VotingPoll({
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Book vote</p>
           <button
             onClick={() => setShowCreate((v) => !v)}
-            className="text-sm text-coven-lavender hover:text-coven-gold transition-colors"
+            className="text-sm text-coven-lavender hover:text-coven-mystic transition-colors"
           >
             {showCreate ? "Cancel" : "+ Start poll"}
           </button>
@@ -370,7 +373,7 @@ function VotingPoll({
       {poll.is_complete && poll.winner_book_id && (
         <p className="text-xs text-gray-500 mt-3 text-center">
           Voting closed · Go to{" "}
-          <Link to="/schedule" className="text-coven-lavender hover:text-coven-gold transition-colors">
+          <Link to="/schedule" className="text-coven-lavender hover:text-coven-mystic transition-colors">
             Schedule
           </Link>{" "}
           to confirm the meeting details
@@ -386,7 +389,7 @@ function StatCard({ label, value, to }: { label: string; value: number; to: stri
       to={to}
       className="bg-app-surface border border-app-border rounded-xl p-5 hover:border-coven-ember/50 transition-colors"
     >
-      <p className="text-3xl font-bold text-coven-gold">{value}</p>
+      <p className="text-3xl font-bold text-coven-spelgold">{value}</p>
       <p className="text-sm text-gray-400 mt-1">{label}</p>
     </Link>
   );

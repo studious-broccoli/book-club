@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import SettingsModal from "./SettingsModal";
 import type { ClubEntry } from "../types";
 
 export default function Navbar() {
@@ -9,6 +10,7 @@ export default function Navbar() {
   const navigate = useNavigate();
   const [clubs, setClubs] = useState<ClubEntry[]>([]);
   const [showClubMenu, setShowClubMenu] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -92,9 +94,13 @@ export default function Navbar() {
 
         <div className="flex items-center gap-3 shrink-0 ml-4">
           {user && (
-            <span className="text-sm text-coven-silver font-medium whitespace-nowrap">
+            <button
+              onClick={() => setShowSettings(true)}
+              className="text-sm text-coven-silver font-medium whitespace-nowrap hover:text-coven-gold transition-colors"
+              title="Open settings"
+            >
               {user.display_name} {user.heart_color}
-            </span>
+            </button>
           )}
           <button
             onClick={handleLogout}
@@ -104,6 +110,8 @@ export default function Navbar() {
           </button>
         </div>
       </div>
+
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </nav>
   );
 }

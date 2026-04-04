@@ -14,7 +14,7 @@ from auth import create_user_token, get_current_membership, hash_password, requi
 from database import Base, SessionLocal, engine, get_db
 from models import Club, ClubMembership, User
 from routers import availability, books, clubs, members, polls, schedule
-from schemas import ClubEntryOut, ClubMemberOut, MeOut, SelectRequest, EnterRequest, TokenResponse
+from schemas import ClubEntryOut, ClubMemberOut, MeOut, ProfileUpdate, SelectRequest, EnterRequest, TokenResponse, UserOut
 
 HEART_EMOJIS = ["💜", "💙", "💚", "💛", "🧡", "❤️", "🩷", "🩵", "💖", "💗"]
 
@@ -191,3 +191,48 @@ def me(membership: ClubMembership = Depends(get_current_membership)) -> MeOut:
         A MeOut combining user and club context.
     """
     return _build_me_out(membership)
+
+
+@app.put("/auth/profile", response_model=MeOut)
+def update_profile(
+    payload: ProfileUpdate,
+    db: Session = Depends(get_db),
+    membership: ClubMembership = Depends(get_current_membership),
+) -> MeOut:
+    """Update the current user's display name, email, and heart emoji.
+
+    display_name is per-club; email and heart_color are global to the user account.
+
+    Args:
+        payload: The fields to update.
+        db: The database session.
+        membership: The current user's club membership.
+
+    Returns:
+        The updated MeOut object.
+    """
+    membership.display_name = payload.display_name
+    if payload.email is not None:
+        membership.user.email = payload.email
+    if payload.heart_color is not None:
+        membership.user.heart_color = payload.heart_color
+    db.commit()
+    db.refresh(membership)
+    return _build_me_out(membership)
+
+
+@app.get("/users", response_model=list[UserOut])
+def list_all_users(
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_global_admin),
+) -> list[UserOut]:
+    """Return all user accounts in the system (global admin only).
+
+    Args:
+        db: The database session.
+        admin: The authenticated global admin user.
+
+    Returns:
+        A list of UserOut objects.
+    """
+    return db.query(User).all()

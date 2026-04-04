@@ -32,10 +32,11 @@ def _build_date_out(meeting: MeetingDate, membership: ClubMembership) -> Meeting
     my_status = next(
         (a.status for a in meeting.availabilities if a.user_id == membership.user_id), None
     )
+    member_display: dict[int, str] = {cm.user_id: cm.display_name for cm in meeting.club.memberships}
     entries = [
         AvailabilityEntry(
             user_id=a.user_id,
-            display_name=a.user.username,
+            display_name=member_display.get(a.user_id, a.user.username),
             status=a.status,
         )
         for a in meeting.availabilities

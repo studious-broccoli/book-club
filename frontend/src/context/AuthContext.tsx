@@ -11,6 +11,8 @@ interface AuthContextValue {
   selectUser: (userId: number, clubId: number) => Promise<void>;
   /** Switch to a different club for the same user (re-issues token) */
   switchClub: (clubId: number) => Promise<void>;
+  /** Re-fetch /auth/me and update the user in context (e.g. after profile update) */
+  refreshUser: () => Promise<void>;
   logout: () => void;
 }
 
@@ -52,13 +54,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await selectUser(user.id, clubId);
   }
 
+  async function refreshUser(): Promise<void> {
+    const res = await api.get<User>("/auth/me");
+    setUser(res.data);
+  }
+
   function logout(): void {
     localStorage.removeItem("token");
     setUser(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, enterClub, selectUser, switchClub, logout }}>
+    <AuthContext.Provider value={{ user, loading, enterClub, selectUser, switchClub, refreshUser, logout }}>
       {children}
     </AuthContext.Provider>
   );
