@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import logging
 import os
 import random
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
@@ -22,11 +26,21 @@ app = FastAPI(title="Book Club API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://thespicybookcoven.com",
+        "https://www.thespicybookcoven.com",
+    ],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    """Return service health status."""
+    return {"status": "ok"}
+
 
 app.include_router(books.router, prefix="/books", tags=["books"])
 app.include_router(schedule.router, prefix="/dates", tags=["schedule"])

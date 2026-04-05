@@ -56,7 +56,7 @@ git push -u origin main
 
 ## Step 3 — Deploy the backend on Render
 
-### 3a. Code changes before deploying
+### 3a. Code changes before deploying (database)
 
 The backend currently uses SQLite. Swap it for Postgres by updating two files:
 
@@ -85,7 +85,28 @@ git commit -m "Add Postgres support for production"
 git push
 ```
 
-### 3b. Create the web service on Render
+### 3b. Add a health endpoint
+
+Add this to `backend/main.py` so you can verify the backend is alive after every deploy:
+
+```python
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+```
+
+### 3c. Enable basic logging
+
+Add this near the top of `backend/main.py`:
+
+```python
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+```
+
+### 3d. Create the web service on Render
 
 1. In Render, click **New → Web Service**
 2. Connect your GitHub account and select the `book-club` repository
@@ -199,13 +220,87 @@ git push
 
 ---
 
-## Step 6 — Verify everything works
+## Step 6 — Data safety (backups)
+
+**Back up your database before any major change** (schema changes, data imports, etc.).
+
+**Create a backup:**
+```bash
+pg_dump $DATABASE_URL > backup.sql
+```
+
+**Restore from a backup:**
+```bash
+psql $DATABASE_URL < backup.sql
+```
+
+Store backup files locally or in cloud storage (Google Drive, Dropbox, etc.). The free Render Postgres plan does not include automatic backups.
+
+---
+
+## Step 7 — Database migrations (for future schema changes)
+
+Once you're live, never modify your database schema by hand. Use Alembic to track and apply changes safely.
+
+**Install:**
+```bash
+pip install alembic
+alembic init alembic
+```
+
+**Workflow for any schema change:**
+```bash
+alembic revision --autogenerate -m "describe the change"
+alembic upgrade head
+```
+
+This prevents schema mismatches between your code and your live database.
+
+> You don't need to set this up before your first deploy — but add it before you make your first post-launch schema change.
+
+---
+
+## Step 8 — Pre-deploy checklist
+
+Run through this before every `git push`:
+
+- [ ] App runs locally without errors
+- [ ] No hardcoded `localhost` URLs in the frontend
+- [ ] All secrets are in `.env`, not in code
+- [ ] `.env` is in `.gitignore`
+- [ ] Environment variables are set in Render and Vercel
+
+---
+
+## Step 9 — Verify everything works
 
 - [ ] `https://thespicybookcoven.com` loads the app
+- [ ] `/health` returns `{"status": "ok"}` (visit `https://book-club-api.onrender.com/health`)
 - [ ] Club password entry works
 - [ ] Name picker shows members
 - [ ] Books and schedule pages load
+- [ ] Create/update actions work (add a test entry, verify it persists)
 - [ ] Vercel auto-deploys when you push to `main` on GitHub
+
+---
+
+## Step 10 — Rollback plan
+
+If something breaks after a deploy, you have two recovery options:
+
+**Option 1 — Revert the code (within minutes):**
+```bash
+git revert HEAD
+git push
+```
+This creates a new commit that undoes the last one. Vercel and Render will redeploy automatically.
+
+**Option 2 — Restore the database (if data was corrupted):**
+```bash
+psql $DATABASE_URL < backup.sql
+```
+
+> Goal: you should always be able to recover in under 10 minutes. That means keeping a recent backup before any risky change.
 
 ---
 
@@ -221,6 +316,20 @@ git commit -m "your message"
 git push
 # Vercel and Render will automatically redeploy
 ```
+
+---
+
+## Operational rules
+
+**Never:**
+- Hardcode secrets or URLs in source code
+- Modify the database schema without a migration (after launch)
+- Deploy without testing locally first
+
+**Always:**
+- Use environment variables for all config
+- Back up the database before major changes
+- Verify the site after every deploy
 
 ---
 

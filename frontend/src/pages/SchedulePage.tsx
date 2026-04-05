@@ -278,6 +278,7 @@ export default function SchedulePage() {
       await api.delete("/clubs/final-selection");
       setFinalSel(null);
     } catch (err: any) {
+      console.error("DELETE /clubs/final-selection failed:", err?.response?.status, err?.response?.data, err);
       const detail = err?.response?.data?.detail;
       alert(typeof detail === "string" ? detail : JSON.stringify(err?.response?.data ?? err?.message ?? "Failed to clear"));
     }
