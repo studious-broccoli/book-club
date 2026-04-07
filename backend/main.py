@@ -28,6 +28,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
+        "https://spicy-book-coven.vercel.app",
         "https://thespicybookcoven.com",
         "https://www.thespicybookcoven.com",
     ],
