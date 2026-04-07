@@ -139,7 +139,7 @@ export interface Poll {
 // ── Cadence ───────────────────────────────────────────────────────────────────
 
 export interface Cadence {
-  frequency: "weekly" | "biweekly" | "monthly";
+  frequency: "weekly" | "biweekly" | "monthly" | "bimonthly" | "quarterly" | "every6months" | "every8months";
   day_of_week: number | null;   // 0=Mon … 6=Sun
   week_of_month: number | null; // 1–5
   preferred_time: "morning" | "afternoon" | "evening" | null;

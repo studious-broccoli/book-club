@@ -280,8 +280,6 @@ export default function AvailabilityPage() {
     setTimeout(() => setSaveLabel(""), 1500);
   }
 
-  const hasPending = pendingWrites.current.size > 0;
-
   return (
     <div className="space-y-6" onMouseLeave={() => { isDragging.current = false; }}>
 
