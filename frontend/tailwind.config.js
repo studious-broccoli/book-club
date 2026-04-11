@@ -3,6 +3,9 @@ export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        script: ['"Alex Brush"', 'cursive'],
+      },
       colors: {
         app: {
           bg:      "#0F1226",  // Deep indigo-black — page background
