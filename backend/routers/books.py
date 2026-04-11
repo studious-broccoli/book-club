@@ -45,6 +45,7 @@ def _build_book_out(book: Book, user_id: int, club_id: int, db: Session) -> Book
         genre=book.genre,
         pages=book.pages,
         is_winner=book.is_winner,
+        is_completed=book.is_completed,
         vote_count=len(book.votes),
         user_voted=user_id in voted_user_ids,
         suggested_by_id=book.created_by_id,
@@ -202,6 +203,35 @@ def set_winner(
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
     book.is_winner = True
+    db.commit()
+    db.refresh(book)
+    return _build_book_out(book, membership.user_id, membership.club_id, db)
+
+
+@router.patch("/{book_id}/complete", response_model=BookOut)
+def mark_completed(
+    book_id: int,
+    db: Session = Depends(get_db),
+    membership: ClubMembership = Depends(require_club_admin),
+) -> BookOut:
+    """Mark a book as completed/read and remove it from active nominees (admin only).
+
+    Args:
+        book_id: The ID of the book to mark as completed.
+        db: The database session.
+        membership: The current user's club membership (admin required).
+
+    Returns:
+        The updated BookOut object.
+
+    Raises:
+        HTTPException: If the book is not found in this club.
+    """
+    book = db.query(Book).filter(Book.id == book_id, Book.club_id == membership.club_id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    book.is_completed = True
+    book.is_winner = False
     db.commit()
     db.refresh(book)
     return _build_book_out(book, membership.user_id, membership.club_id, db)

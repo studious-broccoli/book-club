@@ -246,7 +246,11 @@ def create_poll(
     """
     eligible = (
         db.query(Book)
-        .filter(Book.club_id == membership.club_id, Book.is_winner.is_(False))
+        .filter(
+            Book.club_id == membership.club_id,
+            Book.is_winner.is_(False),
+            Book.is_completed.is_(False),
+        )
         .all()
     )
     if len(eligible) < 3:

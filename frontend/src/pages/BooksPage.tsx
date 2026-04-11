@@ -192,6 +192,7 @@ function BookCard({
   onVote,
   onDelete,
   onSetWinner,
+  onMarkCompleted,
 }: {
   book: Book;
   currentUserId: number;
@@ -199,6 +200,7 @@ function BookCard({
   onVote: (id: number) => void;
   onDelete: (id: number) => void;
   onSetWinner: (id: number) => void;
+  onMarkCompleted?: (id: number) => void;
 }) {
   const emoji = genreEmoji(book.genre);
   const isMine = book.suggested_by_id === currentUserId;
@@ -246,7 +248,7 @@ function BookCard({
           {book.user_voted ? "Voted ✓" : "Vote"}
         </button>
         {/* Pick = admin marks this as the current club book */}
-        {isAdmin && !book.is_winner && (
+        {isAdmin && !book.is_winner && !book.is_completed && (
           <button
             onClick={() => onSetWinner(book.id)}
             title="Admin: mark this as the current club pick (the book you're reading now)"
@@ -255,7 +257,17 @@ function BookCard({
             Pick
           </button>
         )}
-        {isAdmin && (
+        {/* Mark as read = admin archives book after the club finishes it */}
+        {isAdmin && book.is_winner && onMarkCompleted && (
+          <button
+            onClick={() => onMarkCompleted(book.id)}
+            title="Mark as read — moves this book to the completed archive"
+            className="text-sm px-3 py-1.5 rounded-lg font-medium bg-app-raised text-gray-400 hover:bg-green-900/30 hover:text-green-400 transition-colors"
+          >
+            Mark as read
+          </button>
+        )}
+        {isAdmin && !book.is_completed && (
           <button
             onClick={() => onDelete(book.id)}
             className="text-sm text-gray-500 hover:text-red-400 transition-colors px-1"
@@ -326,13 +338,20 @@ export default function BooksPage() {
     setBooks((prev) => prev.map((b) => ({ ...b, is_winner: b.id === res.data.id })));
   }
 
+  async function handleMarkCompleted(bookId: number) {
+    if (!confirm("Mark this book as read? It will move to the completed archive and won't appear in future polls.")) return;
+    const res = await api.patch<Book>(`/books/${bookId}/complete`);
+    setBooks((prev) => prev.map((b) => (b.id === bookId ? res.data : b)));
+  }
+
   async function handleSaveRanking(ids: number[]) {
     const res = await api.put<BookRanking>("/books/my-ranking", { book_ids_ordered: ids });
     setRanking(res.data);
   }
 
-  const winner = books.find((b) => b.is_winner);
-  const nominees = books.filter((b) => !b.is_winner);
+  const winner = books.find((b) => b.is_winner && !b.is_completed);
+  const completed = books.filter((b) => b.is_completed);
+  const nominees = books.filter((b) => !b.is_winner && !b.is_completed);
   const myBooks = nominees.filter((b) => b.suggested_by_id === user?.id);
   const othersBooks = nominees.filter((b) => b.suggested_by_id !== user?.id);
 
@@ -422,6 +441,7 @@ export default function BooksPage() {
             onVote={handleVote}
             onDelete={handleDelete}
             onSetWinner={handleSetWinner}
+            onMarkCompleted={handleMarkCompleted}
           />
         </section>
       )}
@@ -454,6 +474,26 @@ export default function BooksPage() {
           </p>
           <div className="space-y-3">
             {othersBooks.map((b) => (
+              <BookCard
+                key={b.id}
+                book={b}
+                currentUserId={user?.id ?? 0}
+                isAdmin={user?.club_role === "admin"}
+                onVote={handleVote}
+                onDelete={handleDelete}
+                onSetWinner={handleSetWinner}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Completed books */}
+      {completed.length > 0 && (
+        <section>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Books we've read</p>
+          <div className="space-y-3">
+            {completed.map((b) => (
               <BookCard
                 key={b.id}
                 book={b}

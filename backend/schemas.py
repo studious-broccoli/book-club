@@ -148,6 +148,7 @@ class BookOut(BaseModel):
     genre: str | None
     pages: int | None
     is_winner: bool
+    is_completed: bool
     vote_count: int
     user_voted: bool
     suggested_by_id: int

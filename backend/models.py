@@ -60,6 +60,7 @@ class Book(Base):
     genre: Mapped[str | None] = mapped_column(String(100), nullable=True)
     pages: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_winner: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_completed: Mapped[bool] = mapped_column(Boolean, default=False)
     created_by_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

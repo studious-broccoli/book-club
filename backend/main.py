@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 load_dotenv()
@@ -122,6 +123,11 @@ def seed_admin(db: Session) -> None:
 def startup() -> None:
     """Initialize the database and seed on first run."""
     Base.metadata.create_all(bind=engine)
+    with engine.connect() as conn:
+        conn.execute(text(
+            "ALTER TABLE books ADD COLUMN IF NOT EXISTS is_completed BOOLEAN NOT NULL DEFAULT FALSE"
+        ))
+        conn.commit()
     db = SessionLocal()
     try:
         seed_admin(db)

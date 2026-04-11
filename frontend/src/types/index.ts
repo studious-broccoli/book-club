@@ -62,6 +62,7 @@ export interface Book {
   genre: string | null;
   pages: number | null;
   is_winner: boolean;
+  is_completed: boolean;
   vote_count: number;
   user_voted: boolean;
   suggested_by_id: number;
