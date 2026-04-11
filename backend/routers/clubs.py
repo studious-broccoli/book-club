@@ -29,6 +29,7 @@ from schemas import (
     ClubMemberAdd,
     ClubMemberOut,
     ClubOut,
+    ClubPasswordUpdate,
     FinalSelectionIn,
     FinalSelectionOut,
     GroupAvailabilityDay,
@@ -162,6 +163,35 @@ def delete_club(
     db.flush()
 
     db.delete(club)  # cascades ClubMemberships
+    db.commit()
+    return {"ok": True}
+
+
+@router.put("/{club_id}/password")
+def update_club_password(
+    club_id: int,
+    payload: ClubPasswordUpdate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_global_admin),
+) -> dict:
+    """Update a club's password (global admin only).
+
+    Args:
+        club_id: The ID of the club to update.
+        payload: The new password.
+        db: The database session.
+        admin: The authenticated global admin user.
+
+    Returns:
+        A confirmation dict.
+
+    Raises:
+        HTTPException: If the club is not found.
+    """
+    club = db.query(Club).filter(Club.id == club_id).first()
+    if not club:
+        raise HTTPException(status_code=404, detail="Club not found")
+    club.password = payload.password
     db.commit()
     return {"ok": True}
 

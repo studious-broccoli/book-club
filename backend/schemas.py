@@ -84,6 +84,10 @@ class UserCreate(BaseModel):
     role: str = "member"
 
 
+class ClubPasswordUpdate(BaseModel):
+    password: str
+
+
 class ClubMemberAdd(BaseModel):
     """Add an existing or new user to a specific club. Password required only for new users."""
     username: str
