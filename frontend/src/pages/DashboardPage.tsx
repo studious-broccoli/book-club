@@ -25,10 +25,10 @@ export default function DashboardPage() {
   const nextDate = dates[0];
 
   function formatDate(utc: string) {
-    const d = new Date(utc);
-    const et = d.toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", weekday: "short", hour: "numeric", minute: "2-digit" });
-    const mt = d.toLocaleString("en-US", { timeZone: "America/Denver", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
-    return `${et} ET / ${mt}`;
+    return new Date(utc).toLocaleString("en-US", {
+      weekday: "short", month: "short", day: "numeric",
+      hour: "numeric", minute: "2-digit", timeZoneName: "short",
+    });
   }
 
   return (

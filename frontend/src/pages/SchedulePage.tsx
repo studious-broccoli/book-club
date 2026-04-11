@@ -62,19 +62,9 @@ function detectTz(): string {
 
 function formatDateET(utc: string) {
   return new Date(utc).toLocaleString("en-US", {
-    timeZone: "America/New_York",
     weekday: "short",
     month: "short",
     day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  });
-}
-
-function formatTimeMT(utc: string) {
-  return new Date(utc).toLocaleString("en-US", {
-    timeZone: "America/Denver",
     hour: "numeric",
     minute: "2-digit",
     timeZoneName: "short",
@@ -481,9 +471,6 @@ export default function SchedulePage() {
                 {finalSel.confirmed_datetime && (
                   <p className="text-sm text-green-400 font-medium">{formatDateET(finalSel.confirmed_datetime)}</p>
                 )}
-                {finalSel.confirmed_datetime && (
-                  <p className="text-sm text-gray-400">{formatTimeMT(finalSel.confirmed_datetime)}</p>
-                )}
                 {finalSel.notes && <p className="text-sm text-gray-400 pt-1">{finalSel.notes}</p>}
               </div>
               {isAdmin && (
@@ -618,7 +605,6 @@ function DateCard({
       <div className="flex items-start justify-between gap-4 mb-4">
         <div>
           <p className="font-semibold text-white">{formatDateET(date.datetime_utc)}</p>
-          <p className="text-sm text-gray-400">{formatTimeMT(date.datetime_utc)}</p>
           {date.label && <p className="text-sm text-gray-400 mt-0.5">{date.label}</p>}
         </div>
         <div className="flex items-center gap-3 shrink-0">
