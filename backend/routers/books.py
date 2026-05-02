@@ -35,8 +35,12 @@ def _build_book_out(book: Book, user_id: int, club_id: int, db: Session) -> Book
         )
         .first()
     )
-    suggested_by_name = creator_membership.display_name if creator_membership else book.created_by.username
-    suggested_by_heart = book.created_by.heart_color
+    suggested_by_name = (
+        creator_membership.display_name if creator_membership
+        else book.created_by.username if book.created_by
+        else "Deleted User"
+    )
+    suggested_by_heart = book.created_by.heart_color if book.created_by else "💛"
 
     return BookOut(
         id=book.id,

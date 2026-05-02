@@ -2,6 +2,20 @@
 
 This is your step-by-step path from "code on my laptop" to "live website my whole club can use."
 
+
+---
+Terminal 1 — Backend:
+
+
+cd c:\Users\arian_oh3txn2\code\book-club\backend
+venv\Scripts\activate
+uvicorn main:app --reload
+
+Terminal 2 — Frontend:
+cd c:\Users\arian_oh3txn2\code\book-club\frontend
+npm run dev
+
+
 ---
 
 ## Where things stand right now

@@ -17,7 +17,20 @@ load_dotenv()
 
 from auth import create_user_token, get_current_membership, hash_password, require_global_admin
 from database import Base, SessionLocal, engine, get_db
-from models import Club, ClubMembership, User
+from models import (
+    Availability,
+    Book,
+    BookRanking,
+    Club,
+    ClubMembership,
+    MeetingDate,
+    MemberPreference,
+    Poll,
+    PollVote,
+    User,
+    UserAvailability,
+    Vote,
+)
 from routers import availability, books, clubs, members, polls, schedule
 from schemas import ClubEntryOut, ClubMemberOut, MeOut, ProfileUpdate, SelectRequest, EnterRequest, TokenResponse, UserOut
 
@@ -128,6 +141,13 @@ def startup() -> None:
             "ALTER TABLE books ADD COLUMN IF NOT EXISTS is_completed BOOLEAN NOT NULL DEFAULT FALSE"
         ))
         conn.commit()
+        try:
+            conn.execute(text("ALTER TABLE books ALTER COLUMN created_by_id DROP NOT NULL"))
+            conn.execute(text("ALTER TABLE meeting_dates ALTER COLUMN created_by_id DROP NOT NULL"))
+            conn.execute(text("ALTER TABLE polls ALTER COLUMN created_by_id DROP NOT NULL"))
+            conn.commit()
+        except Exception:
+            conn.rollback()
     db = SessionLocal()
     try:
         seed_admin(db)
@@ -257,3 +277,54 @@ def list_all_users(
         A list of UserOut objects.
     """
     return db.query(User).all()
+
+
+@app.delete("/users/{user_id}", status_code=204)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_global_admin),
+) -> None:
+    """Permanently delete a user account and all their data (global admin only).
+
+    Args:
+        user_id: ID of the user to delete.
+        db: The database session.
+        admin: The authenticated global admin performing the deletion.
+
+    Raises:
+        HTTPException: If the user is not found, is a global admin, or is the caller themselves.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    if user.role == "admin":
+        raise HTTPException(status_code=400, detail="Cannot delete a global admin")
+
+    try:
+        # Preserve club-level content but remove the authorship reference
+        db.query(Book).filter(Book.created_by_id == user_id).update(
+            {"created_by_id": None}, synchronize_session=False
+        )
+        db.query(MeetingDate).filter(MeetingDate.created_by_id == user_id).update(
+            {"created_by_id": None}, synchronize_session=False
+        )
+        db.query(Poll).filter(Poll.created_by_id == user_id).update(
+            {"created_by_id": None}, synchronize_session=False
+        )
+
+        # Delete all user-owned rows in dependency order
+        db.query(PollVote).filter(PollVote.user_id == user_id).delete(synchronize_session=False)
+        db.query(Vote).filter(Vote.user_id == user_id).delete(synchronize_session=False)
+        db.query(Availability).filter(Availability.user_id == user_id).delete(synchronize_session=False)
+        db.query(UserAvailability).filter(UserAvailability.user_id == user_id).delete(synchronize_session=False)
+        db.query(BookRanking).filter(BookRanking.user_id == user_id).delete(synchronize_session=False)
+        db.query(MemberPreference).filter(MemberPreference.user_id == user_id).delete(synchronize_session=False)
+        db.query(ClubMembership).filter(ClubMembership.user_id == user_id).delete(synchronize_session=False)
+        db.delete(user)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise

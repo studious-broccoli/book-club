@@ -61,11 +61,11 @@ class Book(Base):
     pages: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_winner: Mapped[bool] = mapped_column(Boolean, default=False)
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_by_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
+    created_by_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     votes: Mapped[list[Vote]] = relationship(back_populates="book", cascade="all, delete-orphan")
-    created_by: Mapped[User] = relationship()
+    created_by: Mapped[User | None] = relationship()
 
 
 class Vote(Base):
@@ -87,11 +87,11 @@ class MeetingDate(Base):
     club_id: Mapped[int] = mapped_column(Integer, ForeignKey("clubs.id"))
     datetime_utc: Mapped[datetime] = mapped_column(DateTime)
     label: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    created_by_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
+    created_by_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     availabilities: Mapped[list[Availability]] = relationship(back_populates="meeting_date", cascade="all, delete-orphan")
-    created_by: Mapped[User] = relationship()
+    created_by: Mapped[User | None] = relationship()
 
 
 class Availability(Base):
@@ -158,11 +158,11 @@ class Poll(Base):
     book_ids: Mapped[str] = mapped_column(Text)  # JSON list of 3 book IDs
     end_date: Mapped[str] = mapped_column(String(10))  # ISO date "2026-05-01"
     winner_book_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("books.id"), nullable=True)
-    created_by_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
+    created_by_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     poll_votes: Mapped[list[PollVote]] = relationship(back_populates="poll", cascade="all, delete-orphan")
-    created_by: Mapped[User] = relationship()
+    created_by: Mapped[User | None] = relationship()
 
 
 class PollVote(Base):
