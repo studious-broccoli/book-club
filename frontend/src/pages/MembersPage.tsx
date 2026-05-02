@@ -126,6 +126,18 @@ export default function MembersPage() {
     refreshClubs();
   }
 
+  async function handleDeleteUser(userId: number, name: string) {
+    if (!confirm(`Permanently delete ${name}? This removes them from all clubs and cannot be undone.`)) return;
+    try {
+      await api.delete(`/users/${userId}`);
+      setAllUsers((prev) => prev.filter((u) => u.id !== userId));
+      refreshClubs();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      alert(msg ?? "Failed to delete user.");
+    }
+  }
+
   function openAddForm(clubId: number) {
     setAddingToClub(addingToClub === clubId ? null : clubId);
     setAddMode("new");
@@ -165,16 +177,24 @@ export default function MembersPage() {
               return (
                 <div key={u.id} className="bg-app-surface border border-app-border rounded-xl px-4 py-3 flex items-center gap-3">
                   <span className="text-xl">{u.heart_color}</span>
-                  <div>
+                  <div className="flex-1">
                     <span className="font-medium text-white text-sm">{name}</span>
                     {u.username.includes(".") && (
                       <p className="text-xs text-gray-500">@{u.username}</p>
                     )}
                   </div>
-                  {u.role === "admin" && (
-                    <span className="ml-auto text-xs bg-coven-amethyst/20 text-coven-lavender px-2 py-0.5 rounded-full">
+                  {u.role === "admin" ? (
+                    <span className="text-xs bg-coven-amethyst/20 text-coven-lavender px-2 py-0.5 rounded-full">
                       admin
                     </span>
+                  ) : u.id !== user?.id && (
+                    <button
+                      onClick={() => handleDeleteUser(u.id, name)}
+                      className="text-gray-500 hover:text-red-400 transition-colors text-sm"
+                      title="Delete user"
+                    >
+                      ✕
+                    </button>
                   )}
                 </div>
               );
