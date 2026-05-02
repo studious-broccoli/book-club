@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -284,7 +284,7 @@ def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
     admin: User = Depends(require_global_admin),
-) -> None:
+) -> Response:
     """Permanently delete a user account and all their data (global admin only).
 
     Args:
@@ -328,3 +328,4 @@ def delete_user(
     except Exception:
         db.rollback()
         raise
+    return Response(status_code=204)
