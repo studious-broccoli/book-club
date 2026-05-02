@@ -7,7 +7,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from auth import get_current_membership, get_current_user_id, hash_password, require_club_admin, require_global_admin
+from auth import get_current_membership, get_current_user_id, hash_password, require_club_admin, require_global_admin, user_has_password
 from database import get_db
 from models import (
     Book,
@@ -70,6 +70,7 @@ def list_my_clubs(
                 display_name=cm.display_name,
                 heart_color=cm.user.heart_color,
                 role=cm.role,
+                has_password=user_has_password(cm.user),
             )
             for cm in m.club.memberships
         ]

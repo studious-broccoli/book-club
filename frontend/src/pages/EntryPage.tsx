@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import type { ClubEntry } from "../types";
+import type { ClubEntry, ClubMember } from "../types";
 
 export default function EntryPage() {
   const { enterClub, selectUser } = useAuth();
@@ -10,6 +10,9 @@ export default function EntryPage() {
   const [password, setPassword] = useState("");
   const [clubs, setClubs] = useState<ClubEntry[] | null>(null);
   const [selectedClub, setSelectedClub] = useState<ClubEntry | null>(null);
+  // Member waiting for personal password entry
+  const [pendingMember, setPendingMember] = useState<ClubMember | null>(null);
+  const [userPassword, setUserPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -35,12 +38,47 @@ export default function EntryPage() {
     }
   }
 
-  async function handleSelect(userId: number, clubId: number) {
-    await selectUser(userId, clubId);
-    navigate("/dashboard");
+  function handleMemberClick(member: ClubMember) {
+    if (member.has_password) {
+      setUserPassword("");
+      setError("");
+      setPendingMember(member);
+    } else {
+      handleSelect(member.user_id, selectedClub!.club_id);
+    }
+  }
+
+  async function handleSelect(userId: number, clubId: number, pw?: string) {
+    setError("");
+    setLoading(true);
+    try {
+      await selectUser(userId, clubId, pw);
+      navigate("/dashboard");
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401) {
+        setError("Wrong password.");
+      } else {
+        setError("Something went wrong. Try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handlePasswordSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pendingMember || !selectedClub) return;
+    await handleSelect(pendingMember.user_id, selectedClub.club_id, userPassword);
   }
 
   function handleBack() {
+    if (pendingMember) {
+      setPendingMember(null);
+      setUserPassword("");
+      setError("");
+      return;
+    }
     if (selectedClub && clubs && clubs.length > 1) {
       setSelectedClub(null);
     } else {
@@ -69,7 +107,7 @@ export default function EntryPage() {
           <h1 className="text-2xl font-bold text-coven-gold">The Spicy Book Coven</h1>
         </div>
 
-        {/* Step 1: password */}
+        {/* Step 1: club password */}
         {clubs === null && (
           <>
             <p className="text-gray-400 text-sm mb-6 text-center">Enter the club password to get started</p>
@@ -127,7 +165,7 @@ export default function EntryPage() {
         )}
 
         {/* Step 3: pick a member */}
-        {selectedClub !== null && (
+        {selectedClub !== null && pendingMember === null && (
           <>
             <p className="text-coven-gold text-sm font-medium mb-1 text-center">{selectedClub.club_name}</p>
             <p className="text-gray-500 text-xs mb-5 text-center">Select your name</p>
@@ -135,7 +173,7 @@ export default function EntryPage() {
               {selectedClub.members.map((m) => (
                 <button
                   key={m.user_id}
-                  onClick={() => handleSelect(m.user_id, selectedClub.club_id)}
+                  onClick={() => handleMemberClick(m)}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-app-border bg-app-raised hover:border-coven-ember hover:bg-app-border transition-colors text-left"
                 >
                   <span className="text-xl">{m.heart_color}</span>
@@ -145,9 +183,50 @@ export default function EntryPage() {
                       admin
                     </span>
                   )}
+                  {m.has_password && m.role !== "admin" && (
+                    <span className="ml-auto text-gray-600 text-xs">🔒</span>
+                  )}
+                  {m.has_password && m.role === "admin" && (
+                    <span className="ml-1 text-gray-600 text-xs">🔒</span>
+                  )}
                 </button>
               ))}
             </div>
+            <button
+              onClick={handleBack}
+              className="mt-4 text-sm text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              ← Back
+            </button>
+          </>
+        )}
+
+        {/* Step 4: personal password (only when member has one set) */}
+        {pendingMember !== null && (
+          <>
+            <p className="text-coven-gold text-sm font-medium mb-1 text-center">
+              {pendingMember.heart_color} {pendingMember.display_name}
+            </p>
+            <p className="text-gray-500 text-xs mb-5 text-center">Enter your password</p>
+            <form onSubmit={handlePasswordSubmit} className="space-y-4">
+              <input
+                type="password"
+                value={userPassword}
+                onChange={(e) => setUserPassword(e.target.value)}
+                className="w-full border border-app-border bg-app-raised rounded-lg px-3 py-2 text-sm text-coven-amber placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-coven-ember"
+                placeholder="Password"
+                required
+                autoFocus
+              />
+              {error && <p className="text-red-400 text-sm">{error}</p>}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-coven-dragon hover:bg-coven-flame text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+              >
+                {loading ? "Checking..." : "Sign in"}
+              </button>
+            </form>
             <button
               onClick={handleBack}
               className="mt-4 text-sm text-gray-500 hover:text-gray-300 transition-colors"

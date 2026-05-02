@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -17,17 +18,55 @@ ACCESS_TOKEN_EXPIRE_DAYS = 30
 
 bearer_scheme = HTTPBearer()
 
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-def hash_password(_password: str) -> str:
-    """Return a placeholder — individual passwords are unused in the simple auth flow.
+_NO_PASSWORD_SENTINEL = "unused"
+
+
+def hash_password(password: str) -> str:
+    """Hash a password with bcrypt.
 
     Args:
-        _password: Ignored.
+        password: The plaintext password.
 
     Returns:
-        A static placeholder string.
+        A bcrypt hash string.
     """
-    return "unused"
+    return _pwd_context.hash(password)
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    """Verify a plaintext password against a bcrypt hash.
+
+    Args:
+        plain: The plaintext password to check.
+        hashed: The stored bcrypt hash.
+
+    Returns:
+        True if the password matches, False otherwise.
+    """
+    return _pwd_context.verify(plain, hashed)
+
+
+def user_has_password(user: User) -> bool:
+    """Return whether the user has set a personal login password.
+
+    Args:
+        user: The user to check.
+
+    Returns:
+        True if a real password hash is stored.
+    """
+    return user.hashed_password != _NO_PASSWORD_SENTINEL
+
+
+def set_no_password(user: User) -> None:
+    """Clear the user's personal password, restoring the sentinel value.
+
+    Args:
+        user: The user whose password should be cleared.
+    """
+    user.hashed_password = _NO_PASSWORD_SENTINEL
 
 
 def create_user_token(user_id: int, club_id: int) -> str:

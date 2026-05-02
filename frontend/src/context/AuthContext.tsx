@@ -7,9 +7,9 @@ interface AuthContextValue {
   loading: boolean;
   /** Step 1: verify club password → returns list of clubs + their members */
   enterClub: (password: string) => Promise<ClubEntry[]>;
-  /** Step 2: select a name and club → stores session */
-  selectUser: (userId: number, clubId: number) => Promise<void>;
-  /** Switch to a different club for the same user (re-issues token) */
+  /** Step 2: select a name and club → stores session. Pass userPassword if the member has one set. */
+  selectUser: (userId: number, clubId: number, userPassword?: string) => Promise<void>;
+  /** Switch to a different club for the same user — no password re-entry needed */
   switchClub: (clubId: number) => Promise<void>;
   /** Re-fetch /auth/me and update the user in context (e.g. after profile update) */
   refreshUser: () => Promise<void>;
@@ -40,18 +40,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return res.data;
   }
 
-  async function selectUser(userId: number, clubId: number): Promise<void> {
+  async function selectUser(userId: number, clubId: number, userPassword?: string): Promise<void> {
     const res = await api.post<{ access_token: string; user: User }>("/auth/select", {
       user_id: userId,
       club_id: clubId,
+      user_password: userPassword ?? null,
     });
     localStorage.setItem("token", res.data.access_token);
     setUser(res.data.user);
   }
 
   async function switchClub(clubId: number): Promise<void> {
-    if (!user) return;
-    await selectUser(user.id, clubId);
+    const res = await api.post<{ access_token: string; user: User }>("/auth/switch-club", {
+      club_id: clubId,
+    });
+    localStorage.setItem("token", res.data.access_token);
+    setUser(res.data.user);
   }
 
   async function refreshUser(): Promise<void> {

@@ -14,6 +14,16 @@ class EnterRequest(BaseModel):
 class SelectRequest(BaseModel):
     user_id: int
     club_id: int
+    user_password: str | None = None
+
+
+class SwitchClubRequest(BaseModel):
+    club_id: int
+
+
+class PasswordSetRequest(BaseModel):
+    new_password: str
+    current_password: str | None = None
 
 
 class TokenResponse(BaseModel):
@@ -41,6 +51,7 @@ class ClubMemberOut(BaseModel):
     display_name: str
     heart_color: str
     role: str
+    has_password: bool
 
 
 class ClubEntryOut(BaseModel):
@@ -62,6 +73,7 @@ class MeOut(BaseModel):
     club_role: str      # per-club role
     club_id: int
     club_name: str
+    has_password: bool
     created_at: datetime
 
 

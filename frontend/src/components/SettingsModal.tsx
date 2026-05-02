@@ -21,12 +21,19 @@ export default function SettingsModal({ onClose }: Props) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
 
-  // Close on overlay click
+  // Password section
+  const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordSaved, setPasswordSaved] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+
   function handleOverlayClick(e: React.MouseEvent) {
     if (e.target === overlayRef.current) onClose();
   }
 
-  // Close on Escape
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -53,6 +60,62 @@ export default function SettingsModal({ onClose }: Props) {
       setError(msg ?? "Failed to save settings.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handlePasswordSave(e: React.FormEvent) {
+    e.preventDefault();
+    setPasswordError("");
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords don't match.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError("Password must be at least 6 characters.");
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      await api.post("/auth/me/password", {
+        new_password: newPassword,
+        current_password: user?.has_password ? currentPassword : null,
+      });
+      await refreshUser();
+      setPasswordSaved(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => { setPasswordSaved(false); setShowPasswordSection(false); }, 1500);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setPasswordError(msg ?? "Failed to update password.");
+    } finally {
+      setPasswordSaving(false);
+    }
+  }
+
+  async function handleRemovePassword() {
+    setPasswordError("");
+    if (!currentPassword) {
+      setPasswordError("Enter your current password to remove it.");
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      await api.delete("/auth/me/password", {
+        data: { new_password: "", current_password: currentPassword },
+      });
+      await refreshUser();
+      setPasswordSaved(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => { setPasswordSaved(false); setShowPasswordSection(false); }, 1500);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setPasswordError(msg ?? "Failed to remove password.");
+    } finally {
+      setPasswordSaving(false);
     }
   }
 
@@ -127,6 +190,80 @@ export default function SettingsModal({ onClose }: Props) {
             </button>
           </div>
         </form>
+
+        {/* Password section */}
+        <div className="mt-5 pt-5 border-t border-app-border">
+          <button
+            type="button"
+            onClick={() => { setShowPasswordSection((v) => !v); setPasswordError(""); }}
+            className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            <span>{showPasswordSection ? "▾" : "▸"}</span>
+            <span>{user?.has_password ? "Change or remove password" : "Set a login password"}</span>
+          </button>
+
+          {showPasswordSection && (
+            <form onSubmit={handlePasswordSave} className="mt-4 space-y-3">
+              {user?.has_password && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">Current password</label>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className={inputCls}
+                    autoComplete="current-password"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">New password</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className={inputCls}
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">Confirm new password</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className={inputCls}
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+
+              {passwordError && <p className="text-red-400 text-sm">{passwordError}</p>}
+              {passwordSaved && <p className="text-green-400 text-sm">Password updated ✓</p>}
+
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  type="submit"
+                  disabled={passwordSaving || passwordSaved}
+                  className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-60"
+                >
+                  {passwordSaved ? "Saved ✓" : passwordSaving ? "Saving…" : user?.has_password ? "Update password" : "Set password"}
+                </button>
+                {user?.has_password && (
+                  <button
+                    type="button"
+                    onClick={handleRemovePassword}
+                    disabled={passwordSaving || passwordSaved}
+                    className="text-sm text-gray-500 hover:text-red-400 transition-colors disabled:opacity-60"
+                  >
+                    Remove password
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ export interface User {
   club_role: "admin" | "member";  // role within the current club
   club_id: number;
   club_name: string;
+  has_password: boolean;
   created_at: string;
 }
 
@@ -26,6 +27,7 @@ export interface ClubMember {
   display_name: string;
   heart_color: string;
   role: "admin" | "member";
+  has_password: boolean;
 }
 
 export interface ClubEntry {

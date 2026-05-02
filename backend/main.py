@@ -15,7 +15,15 @@ from sqlalchemy.orm import Session
 
 load_dotenv()
 
-from auth import create_user_token, get_current_membership, hash_password, require_global_admin
+from auth import (
+    create_user_token,
+    get_current_membership,
+    hash_password,
+    require_global_admin,
+    set_no_password,
+    user_has_password,
+    verify_password,
+)
 from database import Base, SessionLocal, engine, get_db
 from models import (
     Availability,
@@ -32,7 +40,18 @@ from models import (
     Vote,
 )
 from routers import availability, books, clubs, members, polls, schedule
-from schemas import ClubEntryOut, ClubMemberOut, MeOut, ProfileUpdate, SelectRequest, EnterRequest, TokenResponse, UserOut
+from schemas import (
+    ClubEntryOut,
+    ClubMemberOut,
+    MeOut,
+    PasswordSetRequest,
+    ProfileUpdate,
+    SelectRequest,
+    SwitchClubRequest,
+    EnterRequest,
+    TokenResponse,
+    UserOut,
+)
 
 HEART_EMOJIS = ["💜", "💙", "💚", "💛", "🧡", "❤️", "🩷", "🩵", "💖", "💗"]
 
@@ -84,6 +103,7 @@ def _build_me_out(membership: ClubMembership) -> MeOut:
         club_role=membership.role,
         club_id=membership.club_id,
         club_name=membership.club.name,
+        has_password=user_has_password(membership.user),
         created_at=membership.user.created_at,
     )
 
@@ -137,10 +157,13 @@ def startup() -> None:
     """Initialize the database and seed on first run."""
     Base.metadata.create_all(bind=engine)
     with engine.connect() as conn:
-        conn.execute(text(
-            "ALTER TABLE books ADD COLUMN IF NOT EXISTS is_completed BOOLEAN NOT NULL DEFAULT FALSE"
-        ))
-        conn.commit()
+        try:
+            conn.execute(text(
+                "ALTER TABLE books ADD COLUMN is_completed BOOLEAN NOT NULL DEFAULT FALSE"
+            ))
+            conn.commit()
+        except Exception:
+            conn.rollback()
         try:
             conn.execute(text("ALTER TABLE books ALTER COLUMN created_by_id DROP NOT NULL"))
             conn.execute(text("ALTER TABLE meeting_dates ALTER COLUMN created_by_id DROP NOT NULL"))
@@ -182,6 +205,7 @@ def enter(payload: EnterRequest, db: Session = Depends(get_db)) -> list[ClubEntr
                 display_name=m.display_name,
                 heart_color=m.user.heart_color,
                 role=m.role,
+                has_password=user_has_password(m.user),
             )
             for m in club.memberships
         ]
@@ -213,6 +237,9 @@ def select_user(payload: SelectRequest, db: Session = Depends(get_db)) -> TokenR
     )
     if not membership:
         raise HTTPException(status_code=404, detail="Membership not found")
+    if user_has_password(membership.user):
+        if not payload.user_password or not verify_password(payload.user_password, membership.user.hashed_password):
+            raise HTTPException(status_code=401, detail="Wrong password")
     token = create_user_token(membership.user_id, membership.club_id)
     return TokenResponse(
         access_token=token,
@@ -260,6 +287,98 @@ def update_profile(
     db.commit()
     db.refresh(membership)
     return _build_me_out(membership)
+
+
+@app.post("/auth/switch-club", response_model=TokenResponse)
+def switch_club(
+    payload: SwitchClubRequest,
+    db: Session = Depends(get_db),
+    membership: ClubMembership = Depends(get_current_membership),
+) -> TokenResponse:
+    """Issue a new token scoped to a different club for the already-authenticated user.
+
+    No password re-entry is required because the caller already holds a valid JWT.
+
+    Args:
+        payload: Contains the club_id to switch into.
+        db: The database session.
+        membership: The current authenticated membership (used to identify the user).
+
+    Returns:
+        A TokenResponse with a new access token scoped to the requested club.
+
+    Raises:
+        HTTPException: If the user is not a member of the requested club.
+    """
+    target = (
+        db.query(ClubMembership)
+        .filter(
+            ClubMembership.user_id == membership.user_id,
+            ClubMembership.club_id == payload.club_id,
+        )
+        .first()
+    )
+    if not target:
+        raise HTTPException(status_code=404, detail="Membership not found")
+    token = create_user_token(target.user_id, target.club_id)
+    return TokenResponse(access_token=token, token_type="bearer", user=_build_me_out(target))
+
+
+@app.post("/auth/me/password", status_code=204)
+def set_password(
+    payload: PasswordSetRequest,
+    db: Session = Depends(get_db),
+    membership: ClubMembership = Depends(get_current_membership),
+) -> Response:
+    """Set or change the current user's personal login password.
+
+    If the user already has a password, current_password must be provided and correct.
+
+    Args:
+        payload: Contains new_password and optional current_password.
+        db: The database session.
+        membership: The current authenticated membership.
+
+    Raises:
+        HTTPException: If current_password is wrong or new_password is empty.
+    """
+    user = membership.user
+    if user_has_password(user):
+        if not payload.current_password or not verify_password(payload.current_password, user.hashed_password):
+            raise HTTPException(status_code=401, detail="Current password is wrong")
+    if not payload.new_password.strip():
+        raise HTTPException(status_code=400, detail="New password cannot be empty")
+    user.hashed_password = hash_password(payload.new_password)
+    db.commit()
+    return Response(status_code=204)
+
+
+@app.delete("/auth/me/password", status_code=204)
+def remove_own_password(
+    payload: PasswordSetRequest,
+    db: Session = Depends(get_db),
+    membership: ClubMembership = Depends(get_current_membership),
+) -> Response:
+    """Remove the current user's personal login password.
+
+    Requires the current password to confirm intent.
+
+    Args:
+        payload: Must contain current_password for verification; new_password is ignored.
+        db: The database session.
+        membership: The current authenticated membership.
+
+    Raises:
+        HTTPException: If the user has no password set, or current_password is wrong.
+    """
+    user = membership.user
+    if not user_has_password(user):
+        raise HTTPException(status_code=400, detail="No password is set")
+    if not payload.current_password or not verify_password(payload.current_password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Current password is wrong")
+    set_no_password(user)
+    db.commit()
+    return Response(status_code=204)
 
 
 @app.get("/users", response_model=list[UserOut])
@@ -328,4 +447,30 @@ def delete_user(
     except Exception:
         db.rollback()
         raise
+    return Response(status_code=204)
+
+
+@app.delete("/users/{user_id}/password", status_code=204)
+def reset_user_password(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_global_admin),
+) -> Response:
+    """Clear a user's personal login password (global admin only).
+
+    After this, the user can log in again by selecting their name without a password.
+
+    Args:
+        user_id: ID of the user whose password should be cleared.
+        db: The database session.
+        admin: The authenticated global admin.
+
+    Raises:
+        HTTPException: If the user is not found.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    set_no_password(user)
+    db.commit()
     return Response(status_code=204)
