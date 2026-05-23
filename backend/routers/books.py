@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from auth import get_current_membership, require_club_admin
@@ -11,6 +12,57 @@ from models import Book, BookRanking, ClubMembership, Vote
 from schemas import BookCreate, BookOut, BookRankingIn, BookRankingOut
 
 router = APIRouter()
+
+import os as _os
+
+_GOOGLE_BOOKS_URL = "https://www.googleapis.com/books/v1/volumes"
+_GOOGLE_API_KEY = _os.getenv("GOOGLE_BOOKS_API_KEY", "")
+
+
+@router.get("/search")
+async def search_google_books(
+    q: str = Query(..., min_length=2),
+    membership: ClubMembership = Depends(get_current_membership),
+) -> list[dict]:
+    """Proxy a Google Books search and return simplified results.
+
+    Args:
+        q: The search query (title, author, ISBN, etc.).
+        membership: The current user's club membership (auth required).
+
+    Returns:
+        A list of up to 10 book dicts with title, authors, thumbnail, page_count, categories.
+    """
+    params: dict = {"q": q, "maxResults": 10, "langRestrict": "en"}
+    if _GOOGLE_API_KEY:
+        params["key"] = _GOOGLE_API_KEY
+
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            res = await client.get(_GOOGLE_BOOKS_URL, params=params)
+        res.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 429:
+            raise HTTPException(status_code=429, detail="Google Books rate limit hit — add GOOGLE_BOOKS_API_KEY to .env")
+        raise HTTPException(status_code=502, detail="Google Books API unavailable")
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="Google Books API unavailable")
+
+    results = []
+    for item in res.json().get("items", []):
+        info = item.get("volumeInfo", {})
+        thumbnail = info.get("imageLinks", {}).get("thumbnail")
+        if thumbnail:
+            thumbnail = thumbnail.replace("http://", "https://")
+        results.append({
+            "google_id": item.get("id"),
+            "title": info.get("title", ""),
+            "authors": info.get("authors", []),
+            "thumbnail": thumbnail,
+            "page_count": info.get("pageCount"),
+            "categories": info.get("categories", []),
+        })
+    return results
 
 
 def _build_book_out(book: Book, user_id: int, club_id: int, db: Session) -> BookOut:

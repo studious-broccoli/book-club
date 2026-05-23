@@ -4,6 +4,151 @@ import { useAuth } from "../context/AuthContext";
 import { GENRES, genreEmoji } from "../config/genres";
 import type { Book, BookRanking } from "../types";
 
+// ── Google Books search ───────────────────────────────────────────────────────
+
+interface GoogleBook {
+  google_id: string;
+  title: string;
+  authors: string[];
+  thumbnail: string | null;
+  page_count: number | null;
+  categories: string[];
+}
+
+function guessGenre(categories: string[]): string {
+  if (!categories.length) return "";
+  const raw = categories.join(" ").toLowerCase();
+  for (const g of GENRES) {
+    if (raw.includes(g.name.toLowerCase())) return g.name;
+  }
+  // Fallbacks for Google Books' inconsistent category strings
+  if (raw.includes("romance") && raw.includes("fantasy")) return "Romantasy";
+  if (raw.includes("paranormal")) return "Paranormal";
+  if (raw.includes("romance")) return "Romance";
+  if (raw.includes("fantasy")) return "Fantasy";
+  if (raw.includes("science fiction") || raw.includes("sci-fi")) return "Science Fiction";
+  if (raw.includes("horror")) return "Horror";
+  if (raw.includes("cozy")) return "Cozy Mystery";
+  if (raw.includes("mystery") || raw.includes("thriller") || raw.includes("suspense")) return "Mystery Thriller";
+  if (raw.includes("historical")) return "Historical Fiction";
+  if (raw.includes("young adult") || raw.includes("juvenile")) return "Young Adult";
+  if (raw.includes("new adult")) return "New Adult";
+  if (raw.includes("contemporary")) return "Contemporary";
+  if (raw.includes("memoir") || raw.includes("biography") || raw.includes("autobiography")) return "Memoir";
+  if (raw.includes("nonfiction") || raw.includes("non-fiction") || raw.includes("self-help") || raw.includes("true crime")) return "Non-Fiction";
+  if (raw.includes("graphic") || raw.includes("comics")) return "Graphic Novel";
+  if (raw.includes("poetry")) return "Poetry";
+  if (raw.includes("short stor")) return "Short Stories";
+  if (raw.includes("literary") || raw.includes("classics")) return "Literary Fiction";
+  return "";
+}
+
+function BookSearchInput({
+  onSelect,
+}: {
+  onSelect: (book: GoogleBook) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<GoogleBook[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    function close(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+
+  function handleChange(q: string) {
+    setQuery(q);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (!q.trim()) { setResults([]); setOpen(false); return; }
+    timerRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await api.get<GoogleBook[]>(`/books/search?q=${encodeURIComponent(q)}`);
+        setResults(res.data);
+        setOpen(true);
+      } catch {
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+  }
+
+  function handleSelect(book: GoogleBook) {
+    onSelect(book);
+    setQuery(book.title);
+    setOpen(false);
+    setResults([]);
+  }
+
+  return (
+    <div className="relative col-span-full" ref={containerRef}>
+      <div className="relative">
+        <input
+          value={query}
+          onChange={(e) => handleChange(e.target.value)}
+          onFocus={() => results.length > 0 && setOpen(true)}
+          placeholder="Search Google Books (or fill in manually below)"
+          className="w-full border border-app-border bg-app-raised rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-coven-lavender pr-8"
+          autoComplete="off"
+        />
+        {loading && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">⏳</span>
+        )}
+        {query && !loading && (
+          <button
+            type="button"
+            onClick={() => { setQuery(""); setResults([]); setOpen(false); }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-xs"
+          >✕</button>
+        )}
+      </div>
+
+      {open && results.length > 0 && (
+        <ul className="absolute z-50 top-full left-0 mt-1 w-full bg-app-surface border border-app-border rounded-xl shadow-xl max-h-72 overflow-y-auto">
+          {results.map((book) => (
+            <li key={book.google_id}>
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); handleSelect(book); }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-app-raised transition-colors text-left"
+              >
+                {book.thumbnail ? (
+                  <img src={book.thumbnail} alt="" className="w-8 h-12 object-cover rounded shrink-0" />
+                ) : (
+                  <div className="w-8 h-12 bg-app-border rounded shrink-0 flex items-center justify-center text-gray-600 text-xs">📖</div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-white truncate">{book.title}</p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {book.authors.join(", ") || "Unknown author"}
+                    {book.page_count ? ` · ${book.page_count} pages` : ""}
+                  </p>
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {open && !loading && query && results.length === 0 && (
+        <div className="absolute z-50 top-full left-0 mt-1 w-full bg-app-surface border border-app-border rounded-xl shadow-xl px-4 py-3">
+          <p className="text-sm text-gray-500">No results found. Fill in the fields manually below.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Genre autocomplete input ──────────────────────────────────────────────────
 
 function GenreInput({
@@ -390,6 +535,14 @@ export default function BooksPage() {
         <form onSubmit={handleAdd} className="bg-app-surface border border-app-border rounded-xl p-5 space-y-3">
           <h2 className="font-semibold text-white">Suggest a book</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <BookSearchInput
+              onSelect={(book) => setForm({
+                title: book.title,
+                author: book.authors.join(", "),
+                genre: guessGenre(book.categories),
+                pages: book.page_count ? String(book.page_count) : "",
+              })}
+            />
             <input
               placeholder="Title *"
               value={form.title}
