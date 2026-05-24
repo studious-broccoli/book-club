@@ -39,7 +39,9 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     email: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
-    hashed_password: Mapped[str] = mapped_column(String(200))
+    hashed_password: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    supabase_uid: Mapped[str | None] = mapped_column(String(36), unique=True, nullable=True, index=True)
+    auth_migration_status: Mapped[str] = mapped_column(String(30), default="legacy")  # "legacy" | "pending_verification" | "supabase_active" | "disabled"
     role: Mapped[str] = mapped_column(String(20), default="member")  # global role — "admin" can create clubs
     heart_color: Mapped[str] = mapped_column(String(10), default="💜")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -208,3 +210,21 @@ class FinalSelection(Base):
 
     club: Mapped[Club] = relationship()
     book: Mapped[Book | None] = relationship()
+
+
+# ── Pending Memberships ───────────────────────────────────────────────────────
+
+class PendingMembership(Base):
+    __tablename__ = "pending_memberships"
+    __table_args__ = (UniqueConstraint("email", "club_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(100), index=True)
+    club_id: Mapped[int] = mapped_column(Integer, ForeignKey("clubs.id"))
+    invited_by_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    consumed: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    club: Mapped[Club] = relationship()
+    invited_by: Mapped[User | None] = relationship()
