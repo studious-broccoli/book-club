@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
+import LandingPage from "./pages/LandingPage";
 import EntryPage from "./pages/EntryPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
@@ -29,7 +30,10 @@ function AppRoutes() {
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
       <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
 
-      {/* Entry page — redirect to dashboard if already logged in */}
+      {/* Landing page — redirect to dashboard if already logged in */}
+      <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
+
+      {/* Entry page (login/signup form) — redirect to dashboard if already logged in */}
       <Route path="/enter" element={user ? <Navigate to="/dashboard" replace /> : <EntryPage />} />
 
       {/* Protected app routes */}
