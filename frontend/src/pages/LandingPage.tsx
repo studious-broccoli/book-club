@@ -31,7 +31,7 @@ function MockBooks() {
         <div
           key={b.title}
           className={`border rounded-xl p-3 flex items-start justify-between gap-3 ${
-            b.winner
+            "winner" in b && b.winner
               ? "border-coven-lavender/40 bg-coven-lavender/10"
               : "border-app-border bg-app-surface"
           }`}
@@ -40,7 +40,7 @@ function MockBooks() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="font-semibold text-white text-sm">{b.title}</p>
-              {b.winner && (
+              {"winner" in b && b.winner && (
                 <span className="text-xs bg-coven-mystic text-white px-2 py-0.5 rounded-full shrink-0">
                   Current pick 🎉
                 </span>
