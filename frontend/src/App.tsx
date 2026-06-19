@@ -2,6 +2,8 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
 import EntryPage from "./pages/EntryPage";
+import AuthCallbackPage from "./pages/AuthCallbackPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import DashboardPage from "./pages/DashboardPage";
 import BooksPage from "./pages/BooksPage";
 import SchedulePage from "./pages/SchedulePage";
@@ -23,7 +25,14 @@ function AppRoutes() {
 
   return (
     <Routes>
+      {/* Public auth routes — always accessible */}
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
+
+      {/* Entry page — redirect to dashboard if already logged in */}
       <Route path="/enter" element={user ? <Navigate to="/dashboard" replace /> : <EntryPage />} />
+
+      {/* Protected app routes */}
       <Route
         path="/*"
         element={

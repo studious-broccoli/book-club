@@ -6,7 +6,7 @@ import SettingsModal from "./SettingsModal";
 import type { ClubEntry } from "../types";
 
 export default function Navbar() {
-  const { user, logout, switchClub } = useAuth();
+  const { user, signOut, selectClub } = useAuth();
   const navigate = useNavigate();
   const [clubs, setClubs] = useState<ClubEntry[]>([]);
   const [showClubMenu, setShowClubMenu] = useState(false);
@@ -29,14 +29,14 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  function handleLogout() {
-    logout();
+  async function handleLogout() {
+    await signOut();
     navigate("/enter");
   }
 
   async function handleSwitchClub(clubId: number) {
     setShowClubMenu(false);
-    await switchClub(clubId);
+    await selectClub(clubId);
     navigate("/dashboard");
   }
 

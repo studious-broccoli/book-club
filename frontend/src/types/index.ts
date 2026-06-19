@@ -34,6 +34,7 @@ export interface ClubEntry {
   club_id: number;
   club_name: string;
   members: ClubMember[];
+  reg_token?: string | null;
 }
 
 export interface Preferences {
@@ -67,7 +68,7 @@ export interface Book {
   is_completed: boolean;
   vote_count: number;
   user_voted: boolean;
-  suggested_by_id: number;
+  suggested_by_id: number | null;
   suggested_by_name: string;
   suggested_by_heart: string;
   created_at: string;

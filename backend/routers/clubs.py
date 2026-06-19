@@ -1,4 +1,3 @@
-from __future__ import annotations
 
 import json
 import random
@@ -7,7 +6,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from auth import get_current_membership, get_current_user_id, hash_password, require_club_admin, require_global_admin, user_has_password
+from auth import get_current_membership, get_current_user_id, hash_password, get_supabase_admin_client, require_club_admin, require_global_admin, user_has_password
 from database import get_db
 from models import (
     Book,
@@ -17,6 +16,7 @@ from models import (
     ClubMembership,
     FinalSelection,
     MeetingDate,
+    PendingMembership,
     Poll,
     User,
     UserAvailability,
@@ -204,15 +204,17 @@ def add_member_to_club(
     db: Session = Depends(get_db),
     admin: User = Depends(require_global_admin),
 ) -> MemberWithPreferences:
-    """Add an existing or new user to a specific club (global admin only).
+    """Invite a member to a specific club by email (global admin only).
 
-    If the username already exists the user is added to the club without
-    creating a new account (password is ignored). If the user does not exist
-    a new account is created — password is required in that case.
+    If a user with that email already exists in the system they are added to
+    the club directly. Otherwise a placeholder User row is created, a
+    PendingMembership record is stored, and an invite email is sent via the
+    Supabase Admin API. The invited user completes signup by clicking the
+    email link and calling POST /auth/provision.
 
     Args:
         club_id: The ID of the target club.
-        payload: Member details; password only required for new users.
+        payload: The invitee's email and desired display name.
         db: The database session.
         admin: The authenticated global admin user.
 
@@ -221,32 +223,73 @@ def add_member_to_club(
 
     Raises:
         HTTPException: If the club does not exist, the user is already a member,
-            or no password is provided for a new user.
+            or the Supabase invite call fails.
     """
     club = db.query(Club).filter(Club.id == club_id).first()
     if not club:
         raise HTTPException(status_code=404, detail="Club not found")
 
-    user = db.query(User).filter(User.username == payload.username).first()
-    if not user:
-        if not payload.password:
-            raise HTTPException(status_code=400, detail="Password is required for new users")
+    email = payload.email.lower().strip()
+    user = db.query(User).filter(User.email == email).first()
+
+    if user:
+        already = db.query(ClubMembership).filter(
+            ClubMembership.user_id == user.id,
+            ClubMembership.club_id == club_id,
+        ).first()
+        if already:
+            raise HTTPException(status_code=400, detail="User is already a member of this club")
+    else:
+        existing_pending = db.query(PendingMembership).filter(
+            PendingMembership.email == email,
+            PendingMembership.club_id == club_id,
+            PendingMembership.consumed == False,  # noqa: E712
+        ).first()
+        if existing_pending:
+            # Idempotent resend — do not create a duplicate pending record
+            supabase = get_supabase_admin_client()
+            try:
+                supabase.auth.admin.invite_user_by_email(email)
+            except Exception as exc:
+                raise HTTPException(status_code=502, detail=f"Failed to resend invite email: {exc}") from exc
+            placeholder = db.query(User).filter(User.email == email).first()
+            membership = db.query(ClubMembership).filter(
+                ClubMembership.user_id == placeholder.id,
+                ClubMembership.club_id == club_id,
+            ).first()
+            return MemberWithPreferences(
+                user_id=membership.user_id,
+                username=membership.user.username,
+                display_name=membership.display_name,
+                heart_color=membership.user.heart_color,
+                role=membership.role,
+                email=membership.user.email,
+                preferences=None,
+            )
+
         user = User(
-            username=payload.username,
-            email=payload.email,
-            hashed_password=hash_password(payload.password),
-            role="member",
+            username=email,
+            email=email,
+            hashed_password="unused",
+            auth_migration_status="pending_verification",
             heart_color=random.choice(HEART_EMOJIS),
         )
         db.add(user)
         db.flush()
 
-    already = db.query(ClubMembership).filter(
-        ClubMembership.user_id == user.id,
-        ClubMembership.club_id == club_id,
-    ).first()
-    if already:
-        raise HTTPException(status_code=400, detail="User is already a member of this club")
+        pending = PendingMembership(
+            email=email,
+            club_id=club_id,
+            invited_by_id=admin.id,
+        )
+        db.add(pending)
+
+        supabase = get_supabase_admin_client()
+        try:
+            supabase.auth.admin.invite_user_by_email(email)
+        except Exception as exc:
+            db.rollback()
+            raise HTTPException(status_code=502, detail=f"Failed to send invite email: {exc}") from exc
 
     new_membership = ClubMembership(
         user_id=user.id,
@@ -258,16 +301,6 @@ def add_member_to_club(
     db.commit()
     db.refresh(new_membership)
 
-    prefs = new_membership.user.preferences
-    prefs_out = (
-        PreferencesOut(
-            no_weeknights=prefs.no_weeknights,
-            preferred_days=json.loads(prefs.preferred_days) if prefs.preferred_days else [],
-            notes=prefs.notes,
-            blackout_dates=json.loads(prefs.blackout_dates) if prefs.blackout_dates else [],
-        )
-        if prefs else None
-    )
     return MemberWithPreferences(
         user_id=new_membership.user_id,
         username=new_membership.user.username,
@@ -275,7 +308,7 @@ def add_member_to_club(
         heart_color=new_membership.user.heart_color,
         role=new_membership.role,
         email=new_membership.user.email,
-        preferences=prefs_out,
+        preferences=None,
     )
 
 

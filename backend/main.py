@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 import os
 import random
@@ -8,15 +6,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 load_dotenv()
 
 from auth import (
+    create_registration_token,
     create_user_token,
+    decode_registration_token,
+    decode_supabase_token,
     get_current_membership,
     hash_password,
     require_global_admin,
@@ -33,6 +37,7 @@ from models import (
     ClubMembership,
     MeetingDate,
     MemberPreference,
+    PendingMembership,
     Poll,
     PollVote,
     User,
@@ -46,6 +51,7 @@ from schemas import (
     MeOut,
     PasswordSetRequest,
     ProfileUpdate,
+    ProvisionRequest,
     SelectRequest,
     SwitchClubRequest,
     EnterRequest,
@@ -55,7 +61,11 @@ from schemas import (
 
 HEART_EMOJIS = ["💜", "💙", "💚", "💛", "🧡", "❤️", "🩷", "🩵", "💖", "💗"]
 
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(title="Book Club API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -179,7 +189,8 @@ def startup() -> None:
 
 
 @app.post("/auth/enter", response_model=list[ClubEntryOut])
-def enter(payload: EnterRequest, db: Session = Depends(get_db)) -> list[ClubEntryOut]:
+@limiter.limit("10/minute")
+def enter(request: Request, payload: EnterRequest, db: Session = Depends(get_db)) -> list[ClubEntryOut]:
     """Verify a club password and return matching clubs with their member lists.
 
     Args:
@@ -209,7 +220,12 @@ def enter(payload: EnterRequest, db: Session = Depends(get_db)) -> list[ClubEntr
             )
             for m in club.memberships
         ]
-        result.append(ClubEntryOut(club_id=club.id, club_name=club.name, members=members_out))
+        result.append(ClubEntryOut(
+            club_id=club.id,
+            club_name=club.name,
+            members=members_out,
+            reg_token=create_registration_token(club.id),
+        ))
     return result
 
 
@@ -246,6 +262,104 @@ def select_user(payload: SelectRequest, db: Session = Depends(get_db)) -> TokenR
         token_type="bearer",
         user=_build_me_out(membership),
     )
+
+
+@app.post("/auth/provision", response_model=TokenResponse)
+def provision(
+    payload: ProvisionRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> TokenResponse:
+    """Create or retrieve a User+ClubMembership for a Supabase-authenticated user.
+
+    Called after Supabase email verification. The caller must supply a valid
+    registration token (issued by /auth/enter) and a Bearer Supabase JWT.
+
+    This endpoint is idempotent: calling it again for the same supabase_uid and
+    club_id returns the existing membership and a fresh session token.
+
+    Args:
+        payload: Contains reg_token (club-scoped) and the desired display_name.
+        request: The HTTP request, used to read the Authorization header.
+        db: The database session.
+
+    Returns:
+        A TokenResponse with a legacy JWT and full user/club context.
+
+    Raises:
+        HTTPException: If the registration token is invalid/expired, the Supabase
+            token is missing or invalid, or the email is already taken by a
+            different Supabase account.
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Supabase token required")
+    supabase_token = auth_header.removeprefix("Bearer ").strip()
+
+    supabase_uid, email = decode_supabase_token(supabase_token)
+
+    # Resolve or create the User row
+    user = db.query(User).filter(User.supabase_uid == supabase_uid).first()
+    if user is None:
+        existing_by_email = db.query(User).filter(User.email == email).first()
+        if existing_by_email:
+            existing_by_email.supabase_uid = supabase_uid
+            existing_by_email.auth_migration_status = "supabase_active"
+            user = existing_by_email
+        else:
+            user = User(
+                username=email,
+                email=email,
+                hashed_password="unused",
+                supabase_uid=supabase_uid,
+                auth_migration_status="supabase_active",
+                heart_color=random.choice(HEART_EMOJIS),
+            )
+            db.add(user)
+            db.flush()
+    else:
+        user.auth_migration_status = "supabase_active"
+
+    # Resolve club_id from reg_token (club-password flow) or PendingMembership (invite flow)
+    if payload.reg_token:
+        club_id = decode_registration_token(payload.reg_token)
+    else:
+        pending = (
+            db.query(PendingMembership)
+            .filter(
+                PendingMembership.email == email,
+                PendingMembership.consumed == False,  # noqa: E712
+            )
+            .order_by(PendingMembership.created_at.asc())
+            .first()
+        )
+        if not pending:
+            raise HTTPException(status_code=400, detail="No pending invite found for this email — enter the club password to join")
+        club_id = pending.club_id
+        pending.consumed = True
+
+    membership = (
+        db.query(ClubMembership)
+        .filter(ClubMembership.user_id == user.id, ClubMembership.club_id == club_id)
+        .first()
+    )
+    if membership is None:
+        club = db.query(Club).filter(Club.id == club_id).first()
+        if not club:
+            raise HTTPException(status_code=404, detail="Club not found")
+        membership = ClubMembership(
+            user_id=user.id,
+            club_id=club_id,
+            display_name=payload.display_name,
+            role="member",
+        )
+        db.add(membership)
+
+    db.commit()
+    db.refresh(membership)
+
+    token = create_user_token(user.id, club_id)
+    return TokenResponse(access_token=token, token_type="bearer", user=_build_me_out(membership))
 
 
 @app.get("/auth/me", response_model=MeOut)

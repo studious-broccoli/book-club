@@ -1,5 +1,47 @@
 # Auth Upgrade Plan: Supabase Auth with Email Verification
 
+## Status
+
+| Phase | Status |
+|---|---|
+| Phase 1 — Database changes | ✅ Complete |
+| Phase 2 — Backend auth layer | ✅ Complete |
+| Phase 3 — Frontend auth layer | ✅ Complete |
+| Phase 4 — Migrate existing members | Not started |
+| Phase 5 — Cleanup | Not started |
+
+### What was done (Phase 1)
+
+- `supabase_uid` and `auth_migration_status` columns added to `users` table via Supabase SQL editor
+- `hashed_password` made nullable in the DB
+- `User` model in [backend/models.py](backend/models.py) updated with the new columns
+- `PendingMembership` model added to [backend/models.py](backend/models.py); table auto-created by `create_all` on restart
+- Existing columns (`email`, `UniqueConstraint("club_id", "user_id")`) were already in place
+
+### Club context decision — decided ✅
+
+The current JWT embeds `club_id` directly, so every request carries both identity and club context in one token. Supabase JWTs only contain identity (`sub` = `supabase_uid`). Club context will be passed via an `X-Club-Id` request header alongside the Supabase JWT.
+
+- Backend reads `X-Club-Id` in `get_current_membership`, verifies the user is a member of that club, and returns the `ClubMembership` as before
+- Frontend sends `X-Club-Id: {clubId}` on every API request once a club is selected
+- The legacy token path is unchanged during Phase 4 — `club_id` continues to come from the token for users who haven't migrated yet
+
+### Next steps for Phase 2
+
+1. ✅ Decide on club context mechanism — `X-Club-Id` header
+2. ✅ Add `SUPABASE_JWT_SECRET` to `.env` and Render environment variables
+3. ✅ Install `supabase-py` — added `supabase>=2.30.0` to `requirements.txt`
+4. ✅ Write a `_decode_supabase_token(token)` function in `auth.py` that verifies Supabase JWTs using the new secret, validates `email_confirmed_at`, and returns `supabase_uid`
+5. ✅ Update `get_current_membership` to handle both legacy tokens (existing flow, unchanged) and Supabase tokens (new flow via `supabase_uid` + `X-Club-Id` header) — token type detected via `_is_supabase_token` (peeks at `aud` claim). Also updated `get_current_user_id` and `require_global_admin` the same way.
+6. ✅ Add the `/auth/provision` endpoint
+7. ✅ Add rate limiting to the club password endpoint — `slowapi` 10 req/min by IP on `POST /auth/enter`
+8. ✅ Update admin "add member" to call Supabase Admin SDK instead of creating a password — duplicate pending invite now idempotently resends instead of erroring
+
+### Phase 2 progress note
+Backend dual-auth is in place and verified — existing users can still log in via legacy tokens. Supabase token path is wired but untested until a Supabase user exists (that happens in Phase 3).
+
+---
+
 ## Overview
 
 The current system issues JWTs from the FastAPI backend. The new system uses Supabase Auth to manage identities, email verification, and password reset. The backend stops issuing tokens and instead verifies Supabase-issued JWTs on every request.

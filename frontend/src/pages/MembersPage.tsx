@@ -5,7 +5,7 @@ import type { ClubEntry, UserOut } from "../types";
 
 const inputCls = "border border-app-border bg-app-raised rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-coven-ember";
 
-const emptyAddForm = { first_name: "", last_name: "", password: "", email: "" };
+const emptyAddForm = { email: "", display_name: "" };
 
 export default function MembersPage() {
   const { user } = useAuth();
@@ -28,9 +28,7 @@ export default function MembersPage() {
 
   // Add-member state
   const [addingToClub, setAddingToClub] = useState<number | null>(null);
-  const [addMode, setAddMode] = useState<"new" | "existing">("new");
   const [addForm, setAddForm] = useState(emptyAddForm);
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [addError, setAddError] = useState("");
 
   // Create-club state
@@ -81,36 +79,9 @@ export default function MembersPage() {
     e.preventDefault();
     setAddError("");
     try {
-      const username = `${addForm.first_name.toLowerCase()}.${addForm.last_name.toLowerCase()}`;
-      const display_name = `${addForm.first_name} ${addForm.last_name}`;
       await api.post(`/clubs/${clubId}/members`, {
-        username,
-        display_name,
-        password: addForm.password || null,
-        email: addForm.email || null,
-        role: "member",
-      });
-      closeAddForm();
-      refreshClubs();
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setAddError(msg ?? "Failed to add member.");
-    }
-  }
-
-  async function handleAddExisting(clubId: number) {
-    setAddError("");
-    const u = allUsers.find((x) => x.id === selectedUserId);
-    if (!u) { setAddError("Please select a member."); return; }
-    try {
-      const parts = u.username.split(".");
-      const display_name = parts.map((p: string) => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
-      await api.post(`/clubs/${clubId}/members`, {
-        username: u.username,
-        display_name,
-        password: null,
-        email: null,
-        role: "member",
+        email: addForm.email,
+        display_name: addForm.display_name,
       });
       closeAddForm();
       refreshClubs();
@@ -140,16 +111,13 @@ export default function MembersPage() {
 
   function openAddForm(clubId: number) {
     setAddingToClub(addingToClub === clubId ? null : clubId);
-    setAddMode("new");
     setAddForm(emptyAddForm);
-    setSelectedUserId(null);
     setAddError("");
   }
 
   function closeAddForm() {
     setAddingToClub(null);
     setAddForm(emptyAddForm);
-    setSelectedUserId(null);
     setAddError("");
   }
 
@@ -250,9 +218,6 @@ export default function MembersPage() {
 
       {/* ── Per-club sections ── */}
       {clubs.map((club) => {
-        const memberIds = new Set(club.members.map((m) => m.user_id));
-        const nonMembers = allUsers.filter((u) => !memberIds.has(u.id));
-
         const isCollapsed = collapsedClubs.has(club.club_id);
 
         return (
@@ -293,106 +258,31 @@ export default function MembersPage() {
 
             {!isCollapsed && addingToClub === club.club_id && (
               <div className="bg-app-surface border border-app-border rounded-xl p-5 space-y-4 mb-4">
-                <h3 className="font-semibold text-white">Add member to {club.club_name}</h3>
-
-                {/* Mode toggle */}
-                <div className="flex gap-2">
-                  {(["new", "existing"] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => { setAddMode(mode); setAddError(""); }}
-                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                        addMode === mode
-                          ? "bg-coven-amethyst/30 text-coven-lavender"
-                          : "bg-app-raised text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      {mode === "new" ? "Create new member" : "Add existing member"}
-                    </button>
-                  ))}
-                </div>
-
-                {addMode === "new" ? (
-                  <form onSubmit={(e) => handleAddNew(e, club.club_id)} className="space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <input
-                        placeholder="First name *"
-                        value={addForm.first_name}
-                        onChange={(e) => setAddForm((f) => ({ ...f, first_name: e.target.value }))}
-                        className={inputCls}
-                        required
-                      />
-                      <input
-                        placeholder="Last name *"
-                        value={addForm.last_name}
-                        onChange={(e) => setAddForm((f) => ({ ...f, last_name: e.target.value }))}
-                        className={inputCls}
-                        required
-                      />
-                      <input
-                        placeholder="Password *"
-                        type="password"
-                        value={addForm.password}
-                        onChange={(e) => setAddForm((f) => ({ ...f, password: e.target.value }))}
-                        className={inputCls}
-                        required
-                      />
-                      <input
-                        placeholder="Email (optional)"
-                        type="email"
-                        value={addForm.email}
-                        onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))}
-                        className={inputCls}
-                      />
-                    </div>
-                    {addError && <p className="text-red-400 text-sm">{addError}</p>}
-                    <button type="submit" className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-                      Add member
-                    </button>
-                  </form>
-                ) : (
-                  <div className="space-y-3">
-                    {nonMembers.length === 0 ? (
-                      <p className="text-gray-500 text-sm">All members are already in this club.</p>
-                    ) : (
-                      <>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1">
-                          {nonMembers.map((u) => {
-                            const displayName = u.username.split(".").map((p: string) => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
-                            return (
-                              <button
-                                key={u.id}
-                                type="button"
-                                onClick={() => setSelectedUserId(u.id === selectedUserId ? null : u.id)}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-colors ${
-                                  selectedUserId === u.id
-                                    ? "border-coven-ember bg-coven-ember/10 text-white"
-                                    : "border-app-border bg-app-raised text-gray-300 hover:border-coven-ember/40"
-                                }`}
-                              >
-                                <span>{u.heart_color}</span>
-                                <div>
-                                  <p className="text-sm font-medium">{displayName}</p>
-                                  <p className="text-xs text-gray-500">@{u.username}</p>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {addError && <p className="text-red-400 text-sm">{addError}</p>}
-                        <button
-                          type="button"
-                          onClick={() => handleAddExisting(club.club_id)}
-                          disabled={!selectedUserId}
-                          className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-40"
-                        >
-                          Add to {club.club_name}
-                        </button>
-                      </>
-                    )}
+                <h3 className="font-semibold text-white">Invite member to {club.club_name}</h3>
+                <p className="text-gray-400 text-sm">They'll receive an email to set up their account.</p>
+                <form onSubmit={(e) => handleAddNew(e, club.club_id)} className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input
+                      placeholder="Email *"
+                      type="email"
+                      value={addForm.email}
+                      onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))}
+                      className={inputCls}
+                      required
+                    />
+                    <input
+                      placeholder="Display name *"
+                      value={addForm.display_name}
+                      onChange={(e) => setAddForm((f) => ({ ...f, display_name: e.target.value }))}
+                      className={inputCls}
+                      required
+                    />
                   </div>
-                )}
+                  {addError && <p className="text-red-400 text-sm">{addError}</p>}
+                  <button type="submit" className="bg-coven-dragon hover:bg-coven-flame text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                    Send invite
+                  </button>
+                </form>
               </div>
             )}
 

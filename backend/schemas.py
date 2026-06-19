@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
@@ -24,6 +22,23 @@ class SwitchClubRequest(BaseModel):
 class PasswordSetRequest(BaseModel):
     new_password: str
     current_password: str | None = None
+
+
+# ── Users (defined before TokenResponse so the forward ref resolves) ──────────
+
+class MeOut(BaseModel):
+    """Combined user + current club context returned from /auth/me and login."""
+    id: int
+    username: str
+    email: str | None
+    heart_color: str
+    role: str           # global role
+    display_name: str   # per-club display name
+    club_role: str      # per-club role
+    club_id: int
+    club_name: str
+    has_password: bool
+    created_at: datetime
 
 
 class TokenResponse(BaseModel):
@@ -58,24 +73,15 @@ class ClubEntryOut(BaseModel):
     club_id: int
     club_name: str
     members: list[ClubMemberOut]
+    reg_token: str | None = None
+
+
+class ProvisionRequest(BaseModel):
+    reg_token: str | None = None  # None when arriving via an admin invite link
+    display_name: str
 
 
 # ── Users ─────────────────────────────────────────────────────────────────────
-
-class MeOut(BaseModel):
-    """Combined user + current club context returned from /auth/me and login."""
-    id: int
-    username: str
-    email: str | None
-    heart_color: str
-    role: str           # global role
-    display_name: str   # per-club display name
-    club_role: str      # per-club role
-    club_id: int
-    club_name: str
-    has_password: bool
-    created_at: datetime
-
 
 class UserOut(BaseModel):
     """Lightweight user info used in member listings."""
@@ -101,12 +107,9 @@ class ClubPasswordUpdate(BaseModel):
 
 
 class ClubMemberAdd(BaseModel):
-    """Add an existing or new user to a specific club. Password required only for new users."""
-    username: str
+    """Invite a member to a specific club by email."""
+    email: str
     display_name: str
-    password: str | None = None
-    email: str | None = None
-    role: str = "member"
 
 
 # ── Profile ───────────────────────────────────────────────────────────────────
@@ -163,7 +166,7 @@ class BookOut(BaseModel):
     is_completed: bool
     vote_count: int
     user_voted: bool
-    suggested_by_id: int
+    suggested_by_id: int | None
     suggested_by_name: str
     suggested_by_heart: str
     created_at: datetime

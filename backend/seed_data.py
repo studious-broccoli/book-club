@@ -6,7 +6,6 @@ Run from the backend directory:
 This will wipe any existing data and recreate everything fresh.
 """
 
-from __future__ import annotations
 
 import os
 import random
